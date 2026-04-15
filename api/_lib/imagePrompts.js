@@ -518,19 +518,114 @@ function buildPagePrompt(child_name, characterBible, sceneMeta, basePrompt, page
 }
 
 // ---------------------------------------------------------------------------
+// ENTITY EXTRACTOR — pulls main subjects from a page event description
+// Used to build an explicit mandatory-entity lock in the image prompt so
+// the image model cannot drift to decorative background elements.
+// ---------------------------------------------------------------------------
+
+// Arabic creature/entity keywords → English label for prompt injection
+const ARABIC_ENTITY_MAP = [
+  { ar: 'أسد',       en: 'lion' },
+  { ar: 'نمر',       en: 'tiger' },
+  { ar: 'فيل',       en: 'elephant' },
+  { ar: 'زرافة',     en: 'giraffe' },
+  { ar: 'قرد',       en: 'monkey' },
+  { ar: 'ببغاء',     en: 'parrot' },
+  { ar: 'طائر',      en: 'bird' },
+  { ar: 'حوت',       en: 'whale' },
+  { ar: 'دلفين',     en: 'dolphin' },
+  { ar: 'سلحفاة',    en: 'turtle' },
+  { ar: 'سمكة',      en: 'fish' },
+  { ar: 'أخطبوط',    en: 'octopus' },
+  { ar: 'كلب',       en: 'dog' },
+  { ar: 'قطة',       en: 'cat' },
+  { ar: 'حصان',      en: 'horse' },
+  { ar: 'بقرة',      en: 'cow' },
+  { ar: 'دجاجة',     en: 'chicken' },
+  { ar: 'نجمة',      en: 'star' },
+  { ar: 'قمر',       en: 'moon' },
+  { ar: 'شمس',       en: 'sun' },
+  { ar: 'مركبة',     en: 'spacecraft' },
+  { ar: 'كهف',       en: 'cave' },
+  { ar: 'نهر',       en: 'river' },
+  { ar: 'شجرة',      en: 'tree' },
+  { ar: 'زهرة',      en: 'flower' },
+  { ar: 'كنز',       en: 'treasure' },
+  { ar: 'مفتاح',     en: 'key' },
+  { ar: 'باب',       en: 'door' },
+  { ar: 'جسر',       en: 'bridge' },
+  { ar: 'ضوء',       en: 'glowing light' },
+]
+
+// English entity keywords that may appear in page_events
+const ENGLISH_ENTITY_PATTERNS = [
+  'lion', 'tiger', 'elephant', 'monkey', 'parrot', 'bird', 'whale', 'dolphin',
+  'turtle', 'fish', 'octopus', 'horse', 'cow', 'chicken', 'dog', 'cat',
+  'spacecraft', 'rocket', 'cave', 'river', 'bridge', 'treasure', 'key',
+  'glowing', 'crystal', 'waterfall', 'volcano', 'island', 'creature', 'beast',
+  'giant', 'dragon', 'fairy', 'spirit', 'ghost', 'robot', 'alien',
+]
+
+/**
+ * Returns a comma-separated list of entities that MUST appear in the image.
+ * Checks both the English page_event and Arabic page text for known entities.
+ */
+function extractMandatoryEntities(pageEvent, arabicPageText) {
+  const found = []
+  const eventLower = (pageEvent || '').toLowerCase()
+
+  // Check English event description
+  for (const word of ENGLISH_ENTITY_PATTERNS) {
+    if (eventLower.includes(word) && !found.includes(word)) {
+      found.push(word)
+    }
+  }
+
+  // Check Arabic page text for named creatures/objects
+  if (arabicPageText) {
+    for (const { ar, en } of ARABIC_ENTITY_MAP) {
+      if (arabicPageText.includes(ar) && !found.includes(en)) {
+        found.push(en)
+      }
+    }
+  }
+
+  return found
+}
+
+// ---------------------------------------------------------------------------
 // DYNAMIC PAGE PROMPT — built from actual AI-generated story event
 // Used when story_json is available (True Story Engine path)
+//
+// Structured as explicit directives (not flowing prose) so the image model
+// cannot latch onto atmospheric/decorative words instead of the main subject.
 // ---------------------------------------------------------------------------
-function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageIndex) {
-  const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
+function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageIndex, arabicPageText) {
+  const angle            = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
+  const mandatoryEntities = extractMandatoryEntities(storyEvent, arabicPageText)
+  const entityLock       = mandatoryEntities.length > 0
+    ? `MANDATORY — these specific entities MUST appear prominently in the foreground: ${mandatoryEntities.join(', ')}. `
+    : ''
+  const driftGuard       = mandatoryEntities.length > 0
+    ? `DO NOT replace these with butterflies, flowers, sparkles, or generic decorations. ` +
+      `If the scene has a ${mandatoryEntities[0]}, the ${mandatoryEntities[0]} must be the main subject. `
+    : `DO NOT fill the scene with decorative butterflies, flowers, or sparkles instead of the story subject. `
+
   return (
     `A children's storybook illustration. ` +
-    `HERO CHARACTER (must appear IDENTICAL on every page): ${characterBible.description} ` +
-    // Use the actual story event — not a generic theme scene
-    `THIS EXACT STORY MOMENT: ${storyEvent}. ` +
-    `Draw this specific scene — NOT a generic illustration of the setting. ` +
-    `The scene must show exactly what the story describes: the specific action, emotion, and context. ` +
+    // 1. Hero — always present, always consistent
+    `MAIN CHARACTER (appears on every page with identical face): ${characterBible.description} ` +
+    // 2. Exact scene — the story event, stated plainly
+    `SCENE: ${storyEvent}. ` +
+    // 3. Mandatory entity lock — extracted from event + Arabic text
+    entityLock +
+    // 4. Subject drift guard
+    driftGuard +
+    // 5. Compositional direction
+    `The main subject of this image is the ACTION described — not the background or setting. ` +
+    `Setting and environment are secondary supports only. ` +
     `Camera angle: ${angle}. ` +
+    // 6. Character consistency
     `Same unique face as established — archetype [${characterBible.archetype_id}], ` +
     `same facial structure, same proportions, no generic faces. ` +
     STYLE_LOCK
@@ -790,8 +885,9 @@ function generateStructuredPrompts(order) {
   // ── Cover prompt ──────────────────────────────────────────────────────────
   let coverPrompt
   if (hasStoryJson && story_json.cover_event) {
-    // Dynamic: use the story's iconic cover moment
-    coverPrompt = buildDynamicPagePrompt(child_name, characterBible, story_json.cover_event, 0)
+    // Dynamic: use the story's iconic cover moment (no Arabic page text for cover — use page 1 as proxy)
+    const coverArabicHint = Array.isArray(story_json.pages) ? (story_json.pages[0] || '') : ''
+    coverPrompt = buildDynamicPagePrompt(child_name, characterBible, story_json.cover_event, 0, coverArabicHint)
   } else {
     coverPrompt = buildCoverPrompt(child_name, characterBible, theme)
   }
@@ -803,8 +899,9 @@ function generateStructuredPrompts(order) {
 
     if (hasStoryJson) {
       // Dynamic path: image prompt derived from actual story event
-      const event = story_json.page_events[i - 1]
-      prompt = buildDynamicPagePrompt(child_name, characterBible, event, i)
+      const event          = story_json.page_events[i - 1]
+      const arabicPageText = Array.isArray(story_json.pages) ? (story_json.pages[i - 1] || '') : ''
+      prompt = buildDynamicPagePrompt(child_name, characterBible, event, i, arabicPageText)
       scene_summary      = event
       emotion            = 'as depicted in the story'
       environment        = theme
