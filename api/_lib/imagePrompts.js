@@ -518,12 +518,13 @@ function buildPagePrompt(child_name, characterBible, sceneMeta, basePrompt, page
 }
 
 // ---------------------------------------------------------------------------
-// ENTITY EXTRACTOR — pulls main subjects from a page event description
-// Used to build an explicit mandatory-entity lock in the image prompt so
-// the image model cannot drift to decorative background elements.
+// SCENE PARSER — extracts entities, emotion, expression, and atmosphere
+// from the English page_event + Arabic page text.
+// Used to build a structured image prompt that translates the full narrative
+// moment — not just objects, but emotion, expression, and mood.
 // ---------------------------------------------------------------------------
 
-// Arabic creature/entity keywords → English label for prompt injection
+// Arabic entity keywords → English label
 const ARABIC_ENTITY_MAP = [
   { ar: 'أسد',       en: 'lion' },
   { ar: 'نمر',       en: 'tiger' },
@@ -542,92 +543,224 @@ const ARABIC_ENTITY_MAP = [
   { ar: 'حصان',      en: 'horse' },
   { ar: 'بقرة',      en: 'cow' },
   { ar: 'دجاجة',     en: 'chicken' },
-  { ar: 'نجمة',      en: 'star' },
   { ar: 'قمر',       en: 'moon' },
   { ar: 'شمس',       en: 'sun' },
   { ar: 'مركبة',     en: 'spacecraft' },
   { ar: 'كهف',       en: 'cave' },
   { ar: 'نهر',       en: 'river' },
-  { ar: 'شجرة',      en: 'tree' },
-  { ar: 'زهرة',      en: 'flower' },
   { ar: 'كنز',       en: 'treasure' },
   { ar: 'مفتاح',     en: 'key' },
-  { ar: 'باب',       en: 'door' },
   { ar: 'جسر',       en: 'bridge' },
-  { ar: 'ضوء',       en: 'glowing light' },
 ]
 
-// English entity keywords that may appear in page_events
+// English entity keywords that appear in page_events
 const ENGLISH_ENTITY_PATTERNS = [
   'lion', 'tiger', 'elephant', 'monkey', 'parrot', 'bird', 'whale', 'dolphin',
   'turtle', 'fish', 'octopus', 'horse', 'cow', 'chicken', 'dog', 'cat',
   'spacecraft', 'rocket', 'cave', 'river', 'bridge', 'treasure', 'key',
-  'glowing', 'crystal', 'waterfall', 'volcano', 'island', 'creature', 'beast',
-  'giant', 'dragon', 'fairy', 'spirit', 'ghost', 'robot', 'alien',
+  'crystal', 'waterfall', 'volcano', 'island', 'creature', 'beast',
+  'dragon', 'fairy', 'spirit', 'robot', 'alien', 'storm', 'lightning',
+  'fire', 'ice', 'shadow', 'door', 'gate', 'tree', 'flower',
+]
+
+// Arabic emotion → { expression, atmosphere } for prompt injection
+const ARABIC_EMOTION_MAP = [
+  { ar: ['خاف', 'خوف', 'خائف', 'يخاف', 'مرعوب', 'فزع'],
+    expression: 'child looks visibly frightened, eyes wide with fear, body tense',
+    atmosphere: 'tense, fearful atmosphere, dark dramatic lighting' },
+  { ar: ['فرح', 'سعيد', 'يفرح', 'ابتهج', 'سعادة', 'بهجة'],
+    expression: 'child beaming with joy, wide smile, open body language',
+    atmosphere: 'warm joyful light, bright cheerful atmosphere' },
+  { ar: ['حزن', 'حزين', 'يبكي', 'بكى', 'دموع', 'أسى'],
+    expression: 'child looks sad, downcast eyes, slumped shoulders',
+    atmosphere: 'melancholy soft light, quiet somber tone' },
+  { ar: ['دهشة', 'مندهش', 'مذهول', 'تعجب', 'استغرب', 'مبهوت'],
+    expression: 'child looks amazed, mouth slightly open, wide eyes full of wonder',
+    atmosphere: 'magical awe-inspiring light, sense of discovery' },
+  { ar: ['قلق', 'توتر', 'متوتر', 'قلقاً'],
+    expression: 'child looks worried, brow furrowed, uneasy posture',
+    atmosphere: 'tense uncertain atmosphere, muted colors' },
+  { ar: ['ابتسم', 'يبتسم', 'ضحك', 'يضحك'],
+    expression: 'child smiling warmly, relaxed and happy expression',
+    atmosphere: 'gentle warm light, calm pleasant atmosphere' },
+  { ar: ['أمل', 'تفاؤل', 'يأمل'],
+    expression: 'child looks hopeful, eyes bright and forward-facing',
+    atmosphere: 'soft hopeful golden light on the horizon' },
+  { ar: ['شجاع', 'شجاعة', 'قرر', 'عزم', 'إصرار'],
+    expression: 'child looks determined and brave, chin raised, steady gaze',
+    atmosphere: 'empowering atmosphere, strong confident lighting' },
+  { ar: ['هادئ', 'هدوء', 'سكينة', 'طمأنينة'],
+    expression: 'child looks calm and peaceful, soft relaxed expression',
+    atmosphere: 'serene quiet atmosphere, gentle soft light' },
+  { ar: ['فضول', 'فضولي', 'يتساءل', 'تساءل'],
+    expression: 'child looks curious, head tilted, eyes studying something intently',
+    atmosphere: 'mysterious inviting light, sense of wonder' },
+]
+
+// English emotion/atmosphere keywords in page_events → descriptor
+const ENGLISH_EMOTION_MAP = [
+  { words: ['frightened', 'terrified', 'scared', 'fear', 'horror'],
+    expression: 'child looks visibly frightened, wide eyes, tense body',
+    atmosphere: 'dramatic tense atmosphere, dark moody lighting' },
+  { words: ['joy', 'joyful', 'happy', 'elated', 'celebrating', 'laughing'],
+    expression: 'child beaming with joy, wide smile, arms open',
+    atmosphere: 'bright warm joyful light' },
+  { words: ['sad', 'crying', 'tears', 'grief', 'sorrow'],
+    expression: 'child looks sad, eyes glistening, shoulders dropped',
+    atmosphere: 'quiet melancholy light, soft muted tones' },
+  { words: ['amazed', 'wonder', 'awe', 'astonished', 'wide-eyed'],
+    expression: 'child frozen in wonder, mouth open, eyes wide',
+    atmosphere: 'magical glowing atmosphere, awe-inspiring scene' },
+  { words: ['determined', 'brave', 'courageous', 'resolute', 'stands tall'],
+    expression: 'child looks determined, chin up, confident stance',
+    atmosphere: 'strong empowering light' },
+  { words: ['calm', 'peaceful', 'serene', 'quiet', 'gentle'],
+    expression: 'child looks calm and at peace, soft warm expression',
+    atmosphere: 'serene soft golden light, tranquil atmosphere' },
+  { words: ['curious', 'cautious', 'exploring', 'investigating', 'discovering'],
+    expression: 'child looks curious and cautious, leaning forward',
+    atmosphere: 'mysterious inviting atmosphere' },
+  { words: ['excited', 'thrilled', 'rushing', 'running'],
+    expression: 'child full of energy and excitement, movement in body',
+    atmosphere: 'dynamic energetic atmosphere' },
+  { words: ['worried', 'anxious', 'uneasy', 'nervous'],
+    expression: 'child looks worried, brow furrowed, body guarded',
+    atmosphere: 'uncertain tense atmosphere, shadows present' },
+  { words: ['relieved', 'smiling', 'warm', 'safe'],
+    expression: 'child smiling with relief, relaxed and warm expression',
+    atmosphere: 'warm safe gentle light' },
+]
+
+// Weather/environment signals in page_events
+const ATMOSPHERE_PATTERNS = [
+  { words: ['storm', 'stormy', 'thunder', 'lightning', 'rain', 'raining'],
+    atmosphere: 'dramatic storm in background, rain, dark clouds, lightning flashes' },
+  { words: ['night', 'dark', 'darkness', 'moon', 'stars'],
+    atmosphere: 'nighttime scene, dark sky with moon and stars, deep shadows' },
+  { words: ['sunrise', 'dawn', 'morning light'],
+    atmosphere: 'warm golden sunrise light, hopeful dawn atmosphere' },
+  { words: ['sunset', 'dusk', 'golden hour'],
+    atmosphere: 'warm amber sunset, long shadows, golden hour glow' },
+  { words: ['underwater', 'beneath the sea', 'ocean floor', 'deep water'],
+    atmosphere: 'underwater scene, blue-green filtered light, bubbles rising' },
+  { words: ['fire', 'flames', 'burning'],
+    atmosphere: 'dramatic firelight, orange and red glow, dancing flames visible' },
+  { words: ['snow', 'snowing', 'ice', 'frozen'],
+    atmosphere: 'cold icy scene, white and blue palette, breath visible in air' },
+  { words: ['fog', 'mist', 'misty'],
+    atmosphere: 'mysterious misty atmosphere, soft diffused light, forms emerging from fog' },
+  { words: ['glowing', 'magical light', 'enchanted'],
+    atmosphere: 'magical glowing light, ethereal atmosphere, soft luminous glow' },
 ]
 
 /**
- * Returns a comma-separated list of entities that MUST appear in the image.
- * Checks both the English page_event and Arabic page text for known entities.
+ * Parse the full scene from event + Arabic text.
+ * Returns { entities, expression, atmosphere } for prompt construction.
  */
-function extractMandatoryEntities(pageEvent, arabicPageText) {
-  const found = []
+function parseScene(pageEvent, arabicPageText) {
   const eventLower = (pageEvent || '').toLowerCase()
+  const arabicText = arabicPageText || ''
 
-  // Check English event description
+  // --- Entities ---
+  const entities = []
   for (const word of ENGLISH_ENTITY_PATTERNS) {
-    if (eventLower.includes(word) && !found.includes(word)) {
-      found.push(word)
-    }
+    if (eventLower.includes(word) && !entities.includes(word)) entities.push(word)
+  }
+  for (const { ar, en } of ARABIC_ENTITY_MAP) {
+    if (arabicText.includes(ar) && !entities.includes(en)) entities.push(en)
   }
 
-  // Check Arabic page text for named creatures/objects
-  if (arabicPageText) {
-    for (const { ar, en } of ARABIC_ENTITY_MAP) {
-      if (arabicPageText.includes(ar) && !found.includes(en)) {
-        found.push(en)
+  // --- Emotion/Expression: check English event first, then Arabic text ---
+  let expression = null
+  let emotionAtmosphere = null
+
+  for (const { words, expression: ex, atmosphere: atm } of ENGLISH_EMOTION_MAP) {
+    if (words.some(w => eventLower.includes(w))) {
+      expression = ex
+      emotionAtmosphere = atm
+      break
+    }
+  }
+  if (!expression) {
+    for (const { ar, expression: ex, atmosphere: atm } of ARABIC_EMOTION_MAP) {
+      if (ar.some(w => arabicText.includes(w))) {
+        expression = ex
+        emotionAtmosphere = atm
+        break
       }
     }
   }
 
-  return found
+  // --- Atmosphere: weather/environment signals ---
+  let envAtmosphere = null
+  for (const { words, atmosphere: atm } of ATMOSPHERE_PATTERNS) {
+    if (words.some(w => eventLower.includes(w))) {
+      envAtmosphere = atm
+      break
+    }
+  }
+
+  return { entities, expression, emotionAtmosphere, envAtmosphere }
 }
 
 // ---------------------------------------------------------------------------
-// DYNAMIC PAGE PROMPT — built from actual AI-generated story event
-// Used when story_json is available (True Story Engine path)
-//
-// Structured as explicit directives (not flowing prose) so the image model
-// cannot latch onto atmospheric/decorative words instead of the main subject.
+// DYNAMIC PAGE PROMPT — full scene translation
+// Converts the story event + Arabic page text into a structured image directive
+// covering: WHO, WHAT, HOW THEY FEEL, VISUAL EXPRESSION, ATMOSPHERE
 // ---------------------------------------------------------------------------
 function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageIndex, arabicPageText) {
-  const angle            = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
-  const mandatoryEntities = extractMandatoryEntities(storyEvent, arabicPageText)
-  const entityLock       = mandatoryEntities.length > 0
-    ? `MANDATORY — these specific entities MUST appear prominently in the foreground: ${mandatoryEntities.join(', ')}. `
+  const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
+  const { entities, expression, emotionAtmosphere, envAtmosphere } = parseScene(storyEvent, arabicPageText)
+
+  // Build each directive section
+  const entitySection = entities.length > 0
+    ? `REQUIRED ENTITIES (must appear prominently): ${entities.join(', ')}. `
     : ''
-  const driftGuard       = mandatoryEntities.length > 0
-    ? `DO NOT replace these with butterflies, flowers, sparkles, or generic decorations. ` +
-      `If the scene has a ${mandatoryEntities[0]}, the ${mandatoryEntities[0]} must be the main subject. `
-    : `DO NOT fill the scene with decorative butterflies, flowers, or sparkles instead of the story subject. `
+
+  const expressionSection = expression
+    ? `CHARACTER EXPRESSION & POSTURE: ${expression}. `
+    : `CHARACTER EXPRESSION: character's face and body clearly reflect the emotional state of this moment. `
+
+  const atmosphereSection = [emotionAtmosphere, envAtmosphere].filter(Boolean).join(', ')
+  const atmosphereDirective = atmosphereSection
+    ? `ATMOSPHERE & LIGHTING: ${atmosphereSection}. `
+    : ''
+
+  const driftGuard = entities.length > 0
+    ? `DO NOT replace the main scene with generic decorations, flowers, or sparkles — ` +
+      `the image must show the specific moment described. `
+    : `Show the specific story moment — not a generic setting illustration. `
 
   return (
     `A children's storybook illustration. ` +
-    // 1. Hero — always present, always consistent
-    `MAIN CHARACTER (appears on every page with identical face): ${characterBible.description} ` +
-    // 2. Exact scene — the story event, stated plainly
-    `SCENE: ${storyEvent}. ` +
-    // 3. Mandatory entity lock — extracted from event + Arabic text
-    entityLock +
-    // 4. Subject drift guard
+
+    // 1. Hero — identical on every page
+    `MAIN CHARACTER (same face every page): ${characterBible.description} ` +
+
+    // 2. The full scene — what is happening
+    `EVENT: ${storyEvent}. ` +
+
+    // 3. Required entities
+    entitySection +
+
+    // 4. Emotion and expression — explicit, visual
+    expressionSection +
+
+    // 5. Atmosphere and environment
+    atmosphereDirective +
+
+    // 6. Composition priority: action and emotion over decoration
+    `COMPOSITION: the action and the character's emotional state are the main subject. ` +
+    `Background and setting support the scene but do not dominate it. ` +
     driftGuard +
-    // 5. Compositional direction
-    `The main subject of this image is the ACTION described — not the background or setting. ` +
-    `Setting and environment are secondary supports only. ` +
+
+    // 7. Camera
     `Camera angle: ${angle}. ` +
-    // 6. Character consistency
-    `Same unique face as established — archetype [${characterBible.archetype_id}], ` +
-    `same facial structure, same proportions, no generic faces. ` +
+
+    // 8. Character consistency
+    `Same face as established — archetype [${characterBible.archetype_id}], ` +
+    `same facial structure and proportions throughout. ` +
+
     STYLE_LOCK
   )
 }
