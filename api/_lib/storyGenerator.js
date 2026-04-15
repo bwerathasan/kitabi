@@ -227,28 +227,62 @@ REQUIRED STORY BEATS (follow this arc across 16 pages):
 ${structureFlow}
 
 ════════════════════════════════════════════
-MANDATORY EVENT CHAIN — THIS STORY'S SPECIFIC SEQUENCE
-(These events MUST happen in the specified page ranges. Build story beats around them.)
+MANDATORY EVENT CHAIN — THIS STORY'S SPECIFIC EVENTS
+(Each event MUST be enacted in the page range shown. The 16-PAGE ARC below controls pacing.)
 ════════════════════════════════════════════
 
-PAGES 1–2 (OPENING EVENT):
+PAGES 4–6 (INCITING MOMENT — where the journey begins):
 "${eventChain.start}"
 
-PAGES 3–5 (FIRST CHALLENGE):
+PAGES 7–9 (FIRST OBSTACLE — development phase):
 "${eventChain.mid_a}"
 
-PAGES 6–8 (COMPLICATION):
+PAGES 10–11 (COMPLICATION — turning point territory):
 "${eventChain.mid_b}"
 
-PAGES 9–11 (TURNING POINT):
+PAGES 12–13 (CLIMAX — the decisive moment):
 "${eventChain.mid_c}"
 
 PAGES 15–16 (RESOLUTION):
 "${eventChain.end}"
 
-Each event is MANDATORY — the story must visibly enact it within the specified pages.
-Pages 12–14 are yours to use as build-up toward the resolution.
-These events COMBINE with the blueprint above — they do not replace it.
+Pages 1–3 are the setup phase — no chain events happen here.
+Page 14 is aftermath — the world settling after the climax.
+These events COMBINE with the blueprint. They do not replace it.
+
+════════════════════════════════════════════
+16-PAGE PACING ARC — NON-NEGOTIABLE
+This is the structural contract for children's books. Every page has one job.
+════════════════════════════════════════════
+
+PAGES 1–3: SETUP
+  Page 1 — Introduce ${child_name} doing something ordinary and revealing.
+            Show who they are through action or observation. Warm, calm, curious. Nothing urgent.
+  Page 2 — Deepen the world. One vivid sensory detail the child notices.
+            Let the setting breathe. No plot movement yet.
+  Page 3 — Plant a small seed: something slightly different is noticed or felt.
+            A hint of what is coming — not the thing itself. Quiet anticipation only.
+
+PAGES 4–6: INCITING MOMENT
+  Page 4 — The event that starts everything. ${child_name} is drawn toward something.
+  Page 5 — First response and decision. The journey or task takes shape.
+  Page 6 — The path becomes real. A first complication or discovery shows this is bigger than expected.
+
+PAGES 7–11: DEVELOPMENT
+  Page 7 — Deeper encounter or discovery. Something essential is learned.
+  Page 8 — An obstacle. Not catastrophic — but real. ${child_name} tries something.
+  Page 9 — The challenge deepens or shifts. Something unexpected changes the picture.
+  Page 10 — Emotional midpoint. A quiet beat: doubt, determination, or wonder.
+  Page 11 — A turning point. Direction shifts. The twist lays its final groundwork here.
+
+PAGES 12–14: CLIMAX
+  Page 12 — The hardest moment. Everything learned so far is now needed.
+  Page 13 — The decisive action — the thing only ${child_name} could do.
+  Page 14 — Aftermath. The world begins to settle. A breath before the ending.
+
+PAGES 15–16: RESOLUTION
+  Page 15 — The journey's meaning becomes clear. Warm and gentle.
+  Page 16 — The final quiet beat. One image. Calm wonder. No excitement or urgency.
 
 ════════════════════════════════════════════
 CHARACTER
@@ -280,7 +314,7 @@ ABSOLUTE WRITING RULES — ALL MUST BE FOLLOWED
 8. Use ${child_name}'s name at most ONCE every 3 pages — use pronouns naturally in between.
 9. The blueprint's world rule must be used as an active story element at least TWICE.
 10. Each supporting character must appear in at least 2 different pages doing something specific.
-11. The inciting incident from the blueprint must happen on page 1 or 2 — this is non-negotiable.
+11. Pages 1–3 are SETUP ONLY — no inciting incident, no urgency, no plot action. The blueprint's inciting incident must begin on page 4. This is non-negotiable.
 12. The story must feel UNLIKE any known children's book — no templates, no formulas.
 13. Arabic must be Modern Standard Arabic — formal but warm, beautiful when read aloud.
 14. The story must be SELF-CONSISTENT — what happens on page 3 must still be true on page 14.
@@ -303,22 +337,22 @@ OUTPUT — Return ONLY valid JSON, nothing else
 {
   "title": "و[evocative Arabic story title — the specific adventure name after 'و']",
   "pages": [
-    "Arabic text page 1 — exactly 3 sentences",
-    "Arabic text page 2 — exactly 3 sentences",
-    "Arabic text page 3 — exactly 3 sentences",
-    "Arabic text page 4 — exactly 3 sentences",
-    "Arabic text page 5 — exactly 3 sentences",
-    "Arabic text page 6 — exactly 3 sentences",
-    "Arabic text page 7 — exactly 3 sentences",
-    "Arabic text page 8 — exactly 3 sentences",
-    "Arabic text page 9 — exactly 3 sentences",
-    "Arabic text page 10 — exactly 3 sentences",
-    "Arabic text page 11 — exactly 3 sentences",
-    "Arabic text page 12 — exactly 3 sentences",
-    "Arabic text page 13 — exactly 3 sentences",
-    "Arabic text page 14 — exactly 3 sentences",
-    "Arabic text page 15 — exactly 3 sentences",
-    "Arabic text page 16 — exactly 3 sentences"
+    "Arabic text page 1 — SETUP: introduce child in ordinary world, warm and calm (3 sentences)",
+    "Arabic text page 2 — SETUP: deepen setting, sensory detail, no plot movement (3 sentences)",
+    "Arabic text page 3 — SETUP: small hint or noticing, quiet anticipation (3 sentences)",
+    "Arabic text page 4 — INCITING: the event begins, child is drawn in (3 sentences)",
+    "Arabic text page 5 — INCITING: first response and decision, journey takes shape (3 sentences)",
+    "Arabic text page 6 — INCITING: path becomes real, first complication (3 sentences)",
+    "Arabic text page 7 — DEVELOPMENT: deeper encounter, something learned (3 sentences)",
+    "Arabic text page 8 — DEVELOPMENT: obstacle, child tries something (3 sentences)",
+    "Arabic text page 9 — DEVELOPMENT: challenge deepens or shifts (3 sentences)",
+    "Arabic text page 10 — DEVELOPMENT: emotional midpoint, quiet beat (3 sentences)",
+    "Arabic text page 11 — DEVELOPMENT: turning point, direction shifts (3 sentences)",
+    "Arabic text page 12 — CLIMAX: hardest moment, everything needed now (3 sentences)",
+    "Arabic text page 13 — CLIMAX: decisive action, only this child could do this (3 sentences)",
+    "Arabic text page 14 — AFTERMATH: world settles, a breath before the ending (3 sentences)",
+    "Arabic text page 15 — RESOLUTION: journey's meaning clear, warm and gentle (3 sentences)",
+    "Arabic text page 16 — RESOLUTION: final quiet beat, calm wonder, no urgency (3 sentences)"
   ],
   "page_events": [
     "English scene description page 1",
