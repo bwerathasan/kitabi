@@ -1,67 +1,6 @@
-import { useState } from 'react'
 import imgMain  from '../../images/1776002117490.png'
 import imgTwo   from '../../images/1776001993129.png'
 import imgThree from '../../images/1776001073500.png'
-
-// ---------------------------------------------------------------------------
-// HeroGallery — main image + 2 thumbnails, lives in the hero
-// ---------------------------------------------------------------------------
-const ALL_IMAGES = [
-  { src: imgMain,  alt: 'آدم وعجائب البحار — هدية عيد ميلاد' },
-  { src: imgTwo,   alt: 'طفل يقرأ قصته الشخصية' },
-  { src: imgThree, alt: 'يوسف ومغامرة الغابة' },
-]
-
-function HeroGallery() {
-  const [activeIdx, setActiveIdx] = useState(0)
-  const thumbs = ALL_IMAGES.map((img, i) => ({ ...img, i })).filter(img => img.i !== activeIdx)
-
-  return (
-    <div className="px-5 pt-4 pb-6">
-      {/* Main image */}
-      <div
-        style={{
-          borderRadius: 20,
-          overflow: 'hidden',
-          boxShadow: '0 12px 44px rgba(42,42,42,0.20)',
-          marginBottom: 10,
-        }}
-      >
-        <img
-          src={ALL_IMAGES[activeIdx].src}
-          alt={ALL_IMAGES[activeIdx].alt}
-          style={{ width: '100%', display: 'block', objectFit: 'cover' }}
-        />
-      </div>
-      {/* Two thumbnails — always the 2 non-active images */}
-      <div style={{ display: 'flex', gap: 10 }}>
-        {thumbs.map(img => (
-          <button
-            key={img.i}
-            onClick={() => setActiveIdx(img.i)}
-            style={{
-              flex: 1,
-              borderRadius: 14,
-              overflow: 'hidden',
-              border: '2px solid rgba(200,180,150,0.25)',
-              boxShadow: '0 3px 12px rgba(42,42,42,0.10)',
-              padding: 0,
-              background: 'none',
-              cursor: 'pointer',
-              transition: 'box-shadow 0.15s',
-            }}
-          >
-            <img
-              src={img.src}
-              alt={img.alt}
-              style={{ width: '100%', display: 'block', objectFit: 'cover', aspectRatio: '16/10' }}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Reviews
@@ -117,22 +56,7 @@ function Reviews() {
 }
 
 // ---------------------------------------------------------------------------
-// BenefitPill
-// ---------------------------------------------------------------------------
-function BenefitPill({ icon, text }) {
-  return (
-    <div
-      className="flex items-center gap-1.5 bg-white rounded-full px-3.5 py-2"
-      style={{ boxShadow: '0 2px 10px rgba(42,42,42,0.07)' }}
-    >
-      <span className="text-base leading-none">{icon}</span>
-      <span className="text-[12px] font-bold text-ink-mid whitespace-nowrap">{text}</span>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// StoryPagePreview — looks and feels like a printed page
+// StoryPagePreview
 // ---------------------------------------------------------------------------
 function StoryPagePreview() {
   const nameStyle = {
@@ -209,8 +133,48 @@ export default function Hero({ onNext }) {
         <span className="text-primary font-black text-xl tracking-tight">كِتابي</span>
       </div>
 
-      {/* ── Social proof ────────────────────────────────────────── */}
-      <div className="fade-up flex justify-center px-5 pt-3 pb-1">
+      {/* ════════════════════════════════════════════
+          FIRST SCREEN — everything above the fold
+          ════════════════════════════════════════════ */}
+
+      {/* ── SINGLE hero image (emotional anchor) ────────────────── */}
+      <div className="px-5 pt-3 pb-4 scale-up">
+        <div
+          style={{
+            borderRadius: 20,
+            overflow:     'hidden',
+            boxShadow:    '0 12px 44px rgba(42,42,42,0.20)',
+          }}
+        >
+          <img
+            src={imgMain}
+            alt="طفل يصير بطل قصته"
+            style={{ width: '100%', display: 'block', objectFit: 'cover' }}
+          />
+        </div>
+      </div>
+
+      {/* ── HEADLINE ────────────────────────────────────────────── */}
+      <div className="px-5 text-center mb-2 fade-up-1">
+        <h1
+          className="font-black text-ink"
+          style={{ fontSize: 'clamp(1.75rem, 8vw, 2.2rem)', lineHeight: 1.22, letterSpacing: '-0.01em' }}
+        >
+          طفلك يصير بطل القصة
+          <br />
+          <span className="text-primary">ويشوف اسمه في كل صفحة</span>
+        </h1>
+      </div>
+
+      {/* ── SUBTEXT ─────────────────────────────────────────────── */}
+      <div className="fade-up-2 px-5 text-center mb-3">
+        <p className="text-ink-mid font-semibold mx-auto" style={{ fontSize: '1.02rem', lineHeight: 1.65, maxWidth: 275 }}>
+          قصة مكتوبة باسمه — هو البطل، هي مغامرته هو.
+        </p>
+      </div>
+
+      {/* ── SOCIAL PROOF ────────────────────────────────────────── */}
+      <div className="fade-up-2 flex justify-center px-5 mb-4">
         <div
           className="flex items-center gap-2 px-4 py-2 rounded-full"
           style={{
@@ -226,58 +190,8 @@ export default function Hero({ onNext }) {
         </div>
       </div>
 
-      {/* ── Real hero image + thumbnails ────────────────────────── */}
-      <div className="scale-up">
-        <HeroGallery />
-      </div>
-
-      {/* ── Headline ────────────────────────────────────────────── */}
-      <div className="px-5 text-center mb-3.5">
-        <h1
-          className="fade-up-1 font-black text-ink"
-          style={{ fontSize: 'clamp(1.75rem, 8vw, 2.2rem)', lineHeight: 1.22, letterSpacing: '-0.01em' }}
-        >
-          خلّي طفلك يصير بطل القصة
-          <br />
-          <span className="text-primary">
-            ويشوف اسمه في كل صفحة
-          </span>
-        </h1>
-      </div>
-
-      {/* ── Subtext ─────────────────────────────────────────────── */}
-      <div className="fade-up-2 px-5 text-center mb-5">
-        <p className="text-ink-mid font-semibold mx-auto" style={{ fontSize: '1.05rem', lineHeight: 1.65, maxWidth: 275 }}>
-          قصة مكتوبة باسمه —{' '}
-          <span className="text-ink font-bold">هو البطل، هي مغامرته هو.</span>
-        </p>
-      </div>
-
-      {/* ── Benefit pills ───────────────────────────────────────── */}
-      <div className="fade-up-3 flex flex-wrap justify-center gap-2 px-5 mb-5">
-        <BenefitPill icon="🌟" text="اسمه في كل صفحة"   />
-        <BenefitPill icon="⚡" text="جاهز بـ 3–5 دقائق"    />
-        <BenefitPill icon="📖" text="بالعربية"          />
-      </div>
-
-      {/* ── Emotional block ─────────────────────────────────────── */}
-      <div className="fade-up-4 px-5 mb-6">
-        <div
-          className="w-full rounded-2xl px-5 py-4 text-center"
-          style={{
-            background: 'linear-gradient(140deg, #FFF7F0 0%, #FFF0E2 100%)',
-            border:     '1.5px solid rgba(212,100,58,0.14)',
-          }}
-        >
-          <p className="font-bold text-ink leading-snug" style={{ fontSize: '1.06rem' }}>
-            تخيّل لحظة فتحه الكتاب —{' '}
-            <span className="text-primary">ويرى اسمه بطلاً في كل صفحة</span>
-          </p>
-        </div>
-      </div>
-
-      {/* ── Price tag ───────────────────────────────────────────── */}
-      <div className="fade-up-5 px-5 mb-3">
+      {/* ── PRICE BLOCK ─────────────────────────────────────────── */}
+      <div className="fade-up-3 px-5 mb-3">
         <div
           className="w-full flex items-center justify-center gap-3 rounded-2xl py-3.5"
           style={{
@@ -296,8 +210,8 @@ export default function Hero({ onNext }) {
         </div>
       </div>
 
-      {/* ── Primary CTA ─────────────────────────────────────────── */}
-      <div className="px-5 pb-3 fade-up-5">
+      {/* ── PRIMARY CTA ─────────────────────────────────────────── */}
+      <div className="px-5 pb-2 fade-up-4">
         <button
           onClick={onNext}
           className="w-full text-white font-black rounded-2xl active:scale-[0.97] transition-transform duration-150"
@@ -310,19 +224,24 @@ export default function Hero({ onNext }) {
             letterSpacing: '0.005em',
           }}
         >
-          أنشئ قصة لطفلك الآن — وشاهد اسمه بطلًا خلال 3 إلى 5 دقائق
+          أنشئ قصة لطفلك الآن
         </button>
 
-        <div className="flex items-center justify-center gap-3.5 mt-3.5">
-          <span className="text-[12px] font-semibold text-ink-light">جاهز فورًا</span>
-          <span className="w-px h-3 bg-ink-faint" />
-          <span className="text-[12px] font-semibold text-ink-light">التجربة سهلة</span>
+        {/* ── MICRO TRUST ───────────────────────────────────────── */}
+        <div className="flex items-center justify-center gap-3.5 mt-3">
+          <span className="text-[12px] font-semibold text-ink-light">جاهز خلال 3–5 دقائق</span>
           <span className="w-px h-3 bg-ink-faint" />
           <span className="text-[12px] font-semibold text-ink-light">بدون تعقيد</span>
+          <span className="w-px h-3 bg-ink-faint" />
+          <span className="text-[12px] font-semibold text-ink-light">بدون تسجيل</span>
         </div>
       </div>
 
-      {/* ─── Below the fold ──────────────────────────────────────── */}
+      {/* ════════════════════════════════════════════
+          SECOND SECTION — supporting proof images
+          (after scroll)
+          ════════════════════════════════════════════ */}
+
       <div className="flex flex-col items-center gap-1 py-6 opacity-35">
         <span className="text-[11px] text-ink-light font-semibold">شاهد مثالاً حقيقياً</span>
         <svg width="16" height="10" viewBox="0 0 16 10" fill="none" className="animate-bounce">
@@ -330,7 +249,33 @@ export default function Hero({ onNext }) {
         </svg>
       </div>
 
-      {/* ── Story page preview ──────────────────────────────────── */}
+      {/* ── 2 supporting images side by side ─────────────────────── */}
+      <div className="px-5 pb-6">
+        <div style={{ display: 'flex', gap: 10 }}>
+          {[imgTwo, imgThree].map((src, i) => (
+            <div
+              key={i}
+              style={{
+                flex:         1,
+                borderRadius: 14,
+                overflow:     'hidden',
+                border:       '2px solid rgba(200,180,150,0.25)',
+                boxShadow:    '0 3px 12px rgba(42,42,42,0.10)',
+              }}
+            >
+              <img
+                src={src}
+                alt=""
+                style={{ width: '100%', display: 'block', objectFit: 'cover', aspectRatio: '16/10' }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════
+          THIRD SECTION — story example
+          ════════════════════════════════════════════ */}
       <StoryPagePreview />
 
       {/* ── Reviews ─────────────────────────────────────────────── */}
