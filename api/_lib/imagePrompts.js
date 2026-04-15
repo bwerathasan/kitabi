@@ -294,24 +294,32 @@ function buildCharacterBible(child_name, gender, age_group, theme, appearance, o
   const outfit = outfitMap[theme] || outfitMap.forest
 
   // ── Assemble full character description ───────────────────────────────────
-  // Archetype is the core identity. Appearance fields refine it.
-  // The archetype description is injected into EVERY prompt to prevent
-  // the model from defaulting to a generic average child face.
   const description =
-    // Core identity lock — archetype first so the model anchors on it
     `UNIQUE CHARACTER IDENTITY [${archetype.id} — ${archetype.name}]: ` +
     `${child_name} is a ${age.label} Arabic ${pronoun} with a ${archetype.face}. ` +
     `Face proportions: ${archetype.proportions}. ` +
     `Eye style: ${archetype.eye_style}. ` +
     `Overall visual energy: ${archetype.vibe}. ` +
-    // Appearance layer
     `Skin: ${skin}. Hair: ${hair}. Eyes: ${eyes}. ` +
     `Wearing: ${outfit}. ` +
-    // Strict consistency + anti-generic lock
     `CRITICAL: This EXACT face must appear identically on EVERY page — ` +
     `same unique facial structure, same proportions, same eye shape, same identity. ` +
     `DO NOT draw a generic or average child face. ` +
     `This character is visually distinct and must look nothing like a default illustration child.`
+
+  // ── Identity lock — short-form, appearance-only.
+  // Injected at the START of every prompt (before the scene) so the image
+  // model anchors on these attributes first, and again at the END as a
+  // hard "must not change" reinforcement after the event description.
+  const identity_lock =
+    `LOCKED CHARACTER — NEVER CHANGE THESE ON ANY PAGE: ` +
+    `${child_name} | ${age.label} Arabic ${pronoun} | ` +
+    `skin: ${skin} | ` +
+    `hair: ${hair} | ` +
+    `eyes: ${eyes} | ` +
+    `outfit: ${outfit} | ` +
+    `face structure [${archetype.id}]: ${archetype.face.split(',').slice(0, 2).join(',')}. ` +
+    `Same skin tone, same hair color, same hair shape, same eye color, same gender, same face — every page.`
 
   const visual_tags = [
     `${child_name}`,
@@ -325,7 +333,16 @@ function buildCharacterBible(child_name, gender, age_group, theme, appearance, o
     'strict character consistency across all pages',
   ]
 
-  return { description, visual_tags, archetype_id: archetype.id, archetype_name: archetype.name }
+  return {
+    description,
+    identity_lock,
+    skin,
+    hair,
+    eyes,
+    visual_tags,
+    archetype_id:   archetype.id,
+    archetype_name: archetype.name,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -468,7 +485,7 @@ function buildCoverPrompt(child_name, characterBible, theme) {
   const env = envMap[theme] || envMap.forest
 
   return (
-    // Full archetype-anchored character description on cover too
+    `${characterBible.identity_lock} ` +
     `HERO CHARACTER [archetype ${characterBible.archetype_id} — ${characterBible.archetype_name}]: ` +
     `${characterBible.description} ` +
     `Standing as book-cover hero, ${env}. ` +
@@ -505,14 +522,12 @@ function buildPagePrompt(child_name, characterBible, sceneMeta, basePrompt, page
   const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
   return (
     `A children's storybook illustration. ` +
-    // Full character bible injected on every page — archetype first
+    `${characterBible.identity_lock} ` +
     `HERO CHARACTER (must appear IDENTICAL on every page): ${characterBible.description} ` +
     `This exact scene: ${basePrompt}. ` +
     `Camera angle: ${angle}. ` +
     `Emotional tone: ${sceneMeta.emotion}. ` +
-    // Per-page consistency reinforcement
-    `Same unique face as established — archetype [${characterBible.archetype_id}], ` +
-    `same facial structure, same proportions, no generic faces. ` +
+    `IDENTITY REMINDER: same skin (${characterBible.skin}), same hair (${characterBible.hair}), same eyes (${characterBible.eyes}), same face [${characterBible.archetype_id}] — never change. ` +
     STYLE_LOCK
   )
 }
@@ -712,7 +727,6 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
   const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
   const { entities, expression, emotionAtmosphere, envAtmosphere } = parseScene(storyEvent, arabicPageText)
 
-  // Build each directive section
   const entitySection = entities.length > 0
     ? `REQUIRED ENTITIES (must appear prominently): ${entities.join(', ')}. `
     : ''
@@ -734,32 +748,37 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
   return (
     `A children's storybook illustration. ` +
 
-    // 1. Hero — identical on every page
-    `MAIN CHARACTER (same face every page): ${characterBible.description} ` +
+    // 1. Identity lock FIRST — skin, hair, eyes, gender anchored before anything else
+    `${characterBible.identity_lock} ` +
 
-    // 2. The full scene — what is happening
-    `EVENT: ${storyEvent}. ` +
+    // 2. Full face description for structural reference
+    `FACE REFERENCE: ${characterBible.description} ` +
 
-    // 3. Required entities
+    // 3. The scene — what is happening on this page
+    `THIS PAGE'S EVENT: ${storyEvent}. ` +
+
+    // 4. Required entities
     entitySection +
 
-    // 4. Emotion and expression — explicit, visual
+    // 5. Emotion and expression
     expressionSection +
 
-    // 5. Atmosphere and environment
+    // 6. Atmosphere
     atmosphereDirective +
 
-    // 6. Composition priority: action and emotion over decoration
-    `COMPOSITION: the action and the character's emotional state are the main subject. ` +
-    `Background and setting support the scene but do not dominate it. ` +
+    // 7. Composition
+    `COMPOSITION: action and emotion are the main subject. Background supports — does not dominate. ` +
     driftGuard +
 
-    // 7. Camera
+    // 8. Camera
     `Camera angle: ${angle}. ` +
 
-    // 8. Character consistency
-    `Same face as established — archetype [${characterBible.archetype_id}], ` +
-    `same facial structure and proportions throughout. ` +
+    // 9. Identity reinforcement LAST — repeat the 3 most visually drifted attributes
+    // after the scene so the event description cannot override them
+    `IDENTITY REMINDER: same skin (${characterBible.skin}), ` +
+    `same hair (${characterBible.hair}), ` +
+    `same eyes (${characterBible.eyes}), ` +
+    `same face [${characterBible.archetype_id}] — never change. ` +
 
     STYLE_LOCK
   )
