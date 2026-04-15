@@ -20,35 +20,57 @@ const GEMINI_MODEL = 'gemini-2.0-flash'
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
 async function callGemini(prompt, apiKey) {
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature:      1.05,   // raised from 0.92 for more creative variation
-        topP:             0.96,
-        topK:             64,     // wider token selection for more diverse language
-        maxOutputTokens:  8192,
-        responseMimeType: 'application/json',
-      },
-    }),
-  })
-
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 300)}`)
+  let res
+  try {
+    res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature:      0.85,   // safe: <1.0 required for stable JSON-mode responses
+          topP:             0.95,
+          // topK removed: not needed and can cause 500s on some Gemini versions
+          maxOutputTokens:  8192,
+          responseMimeType: 'application/json',
+        },
+      }),
+    })
+  } catch (fetchErr) {
+    throw new Error(`Gemini network error: ${fetchErr.message}`)
   }
 
-  const data = await res.json()
+  if (!res.ok) {
+    let errBody = ''
+    try { errBody = await res.text() } catch {}
+    console.error(`[gemini] HTTP ${res.status} — body: ${errBody.slice(0, 300)}`)
+    throw new Error(`Gemini API ${res.status}: ${errBody.slice(0, 300)}`)
+  }
+
+  let data
+  try {
+    data = await res.json()
+  } catch (parseErr) {
+    console.error('[gemini] Failed to parse response as JSON:', parseErr.message)
+    throw new Error(`Gemini response parse failed: ${parseErr.message}`)
+  }
+
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) throw new Error('Gemini returned empty response')
+  if (!text) {
+    const finishReason = data?.candidates?.[0]?.finishReason
+    const safetyRatings = JSON.stringify(data?.candidates?.[0]?.safetyRatings ?? [])
+    console.error(`[gemini] Empty text. finishReason=${finishReason} safety=${safetyRatings}`)
+    throw new Error(`Gemini returned empty text (finishReason: ${finishReason})`)
+  }
 
   try {
     return JSON.parse(text)
   } catch {
+    console.error('[gemini] JSON.parse failed — raw text prefix:', text.slice(0, 200))
     const match = text.match(/```(?:json)?\s*([\s\S]+?)```/)
-    if (match) return JSON.parse(match[1])
+    if (match) {
+      try { return JSON.parse(match[1]) } catch {}
+    }
     throw new Error('Gemini response is not valid JSON')
   }
 }

@@ -268,8 +268,12 @@ async function handleGenerateOrder(body, req, res, supabaseUrl, anonKey, service
     console.warn('[generate_order] PDF generation failed (non-fatal):', err.message)
   }
 
-  // 7. Mark as complete
-  await supabasePatch(supabaseUrl, anonKey, id, { status: 'complete' })
+  // 7. Mark as complete (non-fatal — work is already done even if this fails)
+  try {
+    await supabasePatch(supabaseUrl, anonKey, id, { status: 'complete' })
+  } catch (err) {
+    console.error('[generate_order] status=complete PATCH threw (non-fatal):', err.message)
+  }
 
   const host     = req.headers['x-forwarded-host'] || req.headers.host || 'frontend-eight-sage-42.vercel.app'
   const protocol = host.includes('localhost') ? 'http' : 'https'
@@ -342,28 +346,37 @@ export default async function handler(req, res) {
     return res.status(500).json({ detail: 'Missing Supabase env vars' })
   }
 
-  // ── GET requests ─────────────────────────────────────────────────────────
-  if (req.method === 'GET') {
-    const action = req.query.action
-    const id     = req.query.id
+  try {
+    // ── GET requests ───────────────────────────────────────────────────────
+    if (req.method === 'GET') {
+      const action = req.query.action
+      const id     = req.query.id
 
-    if (action === 'book')      return handleBook(req, res, id, SUPABASE_URL, ANON_KEY)
-    if (action === 'get_order') return handleGetOrder(req, res, id, SUPABASE_URL, ANON_KEY)
+      if (action === 'book')      return await handleBook(req, res, id, SUPABASE_URL, ANON_KEY)
+      if (action === 'get_order') return await handleGetOrder(req, res, id, SUPABASE_URL, ANON_KEY)
 
-    return res.status(400).json({ detail: 'Unknown action. Use action=book or action=get_order' })
+      return res.status(400).json({ detail: 'Unknown action. Use action=book or action=get_order' })
+    }
+
+    // ── POST requests ──────────────────────────────────────────────────────
+    if (req.method === 'POST') {
+      const body   = req.body || {}
+      const action = body.action
+
+      if (action === 'create_order')   return await handleCreateOrder(body, res, SUPABASE_URL, ANON_KEY)
+      if (action === 'generate_order') return await handleGenerateOrder(body, req, res, SUPABASE_URL, ANON_KEY, SERVICE_KEY)
+      if (action === 'confirm_order')  return await handleConfirmOrder(body, res, SUPABASE_URL, ANON_KEY)
+
+      return res.status(400).json({ detail: `Unknown action: ${action}` })
+    }
+
+    return res.status(405).json({ detail: 'Method not allowed' })
+
+  } catch (err) {
+    // Global safety net — no uncaught error should ever produce a raw Vercel 500
+    console.error('[main] Unhandled error:', err.message, err.stack?.slice(0, 500))
+    if (!res.headersSent) {
+      return res.status(500).json({ detail: `Server error: ${err.message}` })
+    }
   }
-
-  // ── POST requests ─────────────────────────────────────────────────────────
-  if (req.method === 'POST') {
-    const body   = req.body || {}
-    const action = body.action
-
-    if (action === 'create_order')   return handleCreateOrder(body, res, SUPABASE_URL, ANON_KEY)
-    if (action === 'generate_order') return handleGenerateOrder(body, req, res, SUPABASE_URL, ANON_KEY, SERVICE_KEY)
-    if (action === 'confirm_order')  return handleConfirmOrder(body, res, SUPABASE_URL, ANON_KEY)
-
-    return res.status(400).json({ detail: `Unknown action: ${action}` })
-  }
-
-  return res.status(405).json({ detail: 'Method not allowed' })
 }
