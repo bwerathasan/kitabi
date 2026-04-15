@@ -1,22 +1,14 @@
 /**
- * storyGenerator.js — True Story Engine
+ * storyGenerator.js — True Story Engine v2
  *
  * Uses Google Gemini to generate a completely unique 16-page Arabic story
- * guided by a deterministic Story DNA object.
+ * guided by:
+ *   - A concrete PLOT BLUEPRINT (one of 5 per theme) — specific premise,
+ *     setting variant, inciting incident, characters, world rules
+ *   - 10 cross-cutting DNA dimensions — tone, pacing, conflict, etc.
  *
- * Every order gets a structurally different story — not a template variation
- * but a genuinely different narrative with different structure, tone, pacing,
- * conflict, twist, and emotional arc.
- *
- * Returns:
- * {
- *   title:        string              — Arabic title ("و...")
- *   pages:        string[16]          — Arabic story text per page
- *   page_events:  string[16]          — English image scene descriptions per page
- *   cover_event:  string              — English cover image scene description
- *   dna_summary:  string              — human-readable DNA summary for logging
- *   dna:          object              — DNA dimension IDs
- * }
+ * The blueprint is the primary variation driver — it forces a completely
+ * different story concept even before the DNA dimensions are applied.
  */
 
 import { buildStoryDNA, summarizeDNA } from './storyDNA.js'
@@ -27,17 +19,18 @@ import { buildStoryDNA, summarizeDNA } from './storyDNA.js'
 const GEMINI_MODEL = 'gemini-2.0-flash'
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
-async function callGemini(systemPrompt, apiKey) {
+async function callGemini(prompt, apiKey) {
   const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: systemPrompt }] }],
+      contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature:       0.92,
-        topP:              0.95,
-        maxOutputTokens:   8192,
-        responseMimeType:  'application/json',
+        temperature:      1.05,   // raised from 0.92 for more creative variation
+        topP:             0.96,
+        topK:             64,     // wider token selection for more diverse language
+        maxOutputTokens:  8192,
+        responseMimeType: 'application/json',
       },
     }),
   })
@@ -54,7 +47,6 @@ async function callGemini(systemPrompt, apiKey) {
   try {
     return JSON.parse(text)
   } catch {
-    // Try to extract JSON from the response if it's wrapped in markdown
     const match = text.match(/```(?:json)?\s*([\s\S]+?)```/)
     if (match) return JSON.parse(match[1])
     throw new Error('Gemini response is not valid JSON')
@@ -62,18 +54,8 @@ async function callGemini(systemPrompt, apiKey) {
 }
 
 // ---------------------------------------------------------------------------
-// Theme setting descriptions
+// Age label
 // ---------------------------------------------------------------------------
-const THEME_SETTINGS = {
-  jungle:  'a vast vibrant tropical jungle — ancient trees cathedral-tall, exotic birds, dense green, rivers, hidden clearings, living vines',
-  space:   'the boundless cosmos — planets with rings, colorful nebulae, asteroid fields, alien worlds, starlight in every direction',
-  ocean:   'the deep mysterious ocean — coral reefs exploding with color, underwater caves, glowing creatures, currents and kelp forests',
-  forest:  'an ancient magical forest — enormous old oaks, enchanted clearings, misty paths, moss-covered stones, mystical creatures',
-  desert:  'a vast golden desert — towering dunes, hidden oases, ancient ruins half-buried in sand, desert foxes, blazing stars at night',
-  farm:    'a living farm in full season — golden fields, red barn, animals with personalities, the smell of earth and rain and harvest',
-}
-
-// Age label from age_group
 const AGE_LABELS = {
   '2-4':  '3-year-old',
   '3-5':  '4-year-old',
@@ -85,146 +67,236 @@ const AGE_LABELS = {
 }
 
 // ---------------------------------------------------------------------------
-// Prompt builder
+// Banned openings — grows over time as Gemini develops habits
+// ---------------------------------------------------------------------------
+const BANNED_OPENINGS = [
+  'في يوم من الأيام',
+  'كان يا ما كان',
+  'في قديم الزمان',
+  'ذات يوم',
+  'في صباح',
+  'استيقظ',
+  'فتح عينيه',
+  'قرر أن',
+  'كان هناك',
+  'عاش',
+]
+
+// ---------------------------------------------------------------------------
+// Opening style library — 18 different ways to begin a story
+// Injected into the prompt to show Gemini concrete alternatives
+// ---------------------------------------------------------------------------
+const OPENING_STYLES = [
+  'Begin mid-action — drop the reader straight into something already happening',
+  'Begin with a sensation — what the child hears/smells/feels before they understand where they are',
+  'Begin with an observation — the child notices something wrong before anything is said',
+  'Begin with a single unexpected detail that makes the world feel immediately alive',
+  'Begin with a question the child is already holding as the story opens',
+  'Begin with a contrast — something is different from how it was yesterday',
+  'Begin at the moment of decision — the child is standing at a threshold',
+  'Begin with the world behaving wrongly in a small, specific way',
+  'Begin with an arrival — something or someone has just appeared',
+  'Begin at the end of something else — the previous story has just finished',
+  'Begin in the middle of a conversation already in progress',
+  'Begin with a memory that turns out to be relevant right now',
+  'Begin with a physical sensation that demands to be followed',
+  'Begin with silence — a specific, loaded silence',
+  'Begin with something the child cannot explain but refuses to ignore',
+  'Begin with the world holding its breath',
+  'Begin with an object that is out of place',
+  'Begin with the last ordinary moment before everything changes',
+]
+
+// ---------------------------------------------------------------------------
+// Prompt builder — blueprint-driven
 // ---------------------------------------------------------------------------
 function buildGenerationPrompt(order, dna) {
   const { child_name, gender, age_group, theme } = order
-  const isMale   = gender === 'male' || gender === 'boy' || gender === 'ذكر'
-  const pronoun  = isMale ? 'هو' : 'هي'
-  const setting  = THEME_SETTINGS[theme] || THEME_SETTINGS.forest
-  const ageLabel = AGE_LABELS[age_group] || '6-year-old'
+  const isMale      = gender === 'male' || gender === 'boy' || gender === 'ذكر'
+  const pronoun     = isMale ? 'هو' : 'هي'
+  const ageLabel    = AGE_LABELS[age_group] || '6-year-old'
   const genderLabel = isMale ? 'boy' : 'girl'
+  const bp          = dna.blueprint
 
-  // Build the structure flow as numbered instructions
+  // Select opening style using the blueprint id as additional entropy
+  const openingStyleIndex = Math.abs(
+    bp.id.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)
+  ) % OPENING_STYLES.length
+  const openingStyle = OPENING_STYLES[openingStyleIndex]
+
+  // Cast list from blueprint + secondary
+  const castList = [
+    ...bp.supporting_cast,
+    dna.secondary,
+  ].map((c, i) => `  ${i + 1}. ${c}`).join('\n')
+
+  // Structure flow
   const structureFlow = dna.structure.flow
     .map((beat, i) => `  ${i + 1}. ${beat}`)
     .join('\n')
 
-  return `You are a master Arabic children's book author with decades of experience writing stories that children love and parents find genuinely moving.
+  // Banned openings list
+  const bannedList = BANNED_OPENINGS.map(b => `"${b}"`).join(', ')
 
-Write a complete 16-page Arabic storybook for a child named "${child_name}".
+  return `You are a master Arabic children's book author. Your stories are celebrated for being genuinely DIFFERENT from each other — no two feel alike, even when set in the same world.
 
-═══════════════════════════════════════════════
-STORY DNA — follow every dimension with precision
-═══════════════════════════════════════════════
+Write a complete, unique 16-page Arabic storybook for ${child_name}.
 
-GOAL (what ${child_name} must achieve):
-"${dna.goal.en}"
+════════════════════════════════════════════
+THIS STORY'S SPECIFIC BLUEPRINT
+(this is NOT a generic theme story — it is this exact story)
+════════════════════════════════════════════
 
-EMOTIONAL TONE (the feeling that pervades every single page):
+STORY PREMISE:
+"${bp.premise}"
+
+THE STORY BEGINS WITH THIS EXACT INCITING INCIDENT:
+"${bp.inciting_incident}"
+
+${child_name}'s ROLE IN THIS SPECIFIC STORY:
+"${bp.protagonist_role}"
+
+THE SPECIFIC SETTING (not generic — use these exact visual details):
+"${bp.setting_variant}"
+
+THE WORLD RULE UNIQUE TO THIS STORY:
+"${bp.world_detail}"
+
+THE CHARACTERS IN THIS STORY:
+${castList}
+
+THE SPECIFIC CHALLENGE:
+"${bp.core_challenge}"
+
+════════════════════════════════════════════
+STORY DNA — CROSS-CUTTING DIMENSIONS
+════════════════════════════════════════════
+
+EMOTIONAL TONE (felt on every page, not stated):
 "${dna.tone.en}"
 
-PACING STYLE (how the story moves through its 16 pages):
+PACING STYLE (how pages flow):
 "${dna.pacing.en}"
 
 TYPE OF CONFLICT (the nature of the core challenge):
 "${dna.conflict.en}"
 
-HELPER CHARACTER (the aid ${child_name} receives, if any):
+HELPER DYNAMIC:
 "${dna.helper.en}"
 
-PLOT TWIST (a surprise that recontextualizes the story):
+PLOT TWIST (lay groundwork from page 6 onward, deliver by page 12):
 "${dna.twist.en}"
 
-ENDING TYPE (how the story closes emotionally):
+ENDING TYPE:
 "${dna.ending.en}"
 
-NARRATIVE STYLE (how the story is structured):
+NARRATIVE STRUCTURE STYLE:
 "${dna.narrative.en}"
 
-OPENING HOOK (exactly how page 1 begins):
-"${dna.opening.en}"
+OVERARCHING GOAL:
+"${dna.goal.en}"
 
-═══════════════════════════════════════════════
+════════════════════════════════════════════
 STORY STRUCTURE: "${dna.structure.name}"
 ${dna.structure.description}
-═══════════════════════════════════════════════
+════════════════════════════════════════════
 REQUIRED STORY BEATS (follow this arc across 16 pages):
 ${structureFlow}
 
-═══════════════════════════════════════════════
-CHARACTER + SETTING
-═══════════════════════════════════════════════
+════════════════════════════════════════════
+CHARACTER
+════════════════════════════════════════════
 Name: ${child_name}
-Age: ${ageLabel} ${genderLabel}, pronoun in Arabic: ${pronoun}
-Setting: ${setting}
-Theme category: ${theme}
+Age: ${ageLabel} ${genderLabel}
+Arabic pronoun: ${pronoun}
+Theme world: ${theme}
 
-═══════════════════════════════════════════════
-ABSOLUTE WRITING RULES
-═══════════════════════════════════════════════
-1. Each page: EXACTLY 3 sentences of Arabic. Short, vivid, poetic. No more, no less.
-2. EVERY page must open with a different Arabic word — no two pages can start the same way.
-3. Use "فجأة" (suddenly) MAXIMUM ONCE in the entire story. Vary how you introduce surprise.
-4. Every page must visibly advance the plot OR deepen the emotional state — ZERO filler pages.
-5. The tone "${dna.tone.id}" must be FELT, not stated. Show it in word choice and rhythm.
-6. The conflict must feel REAL and personal — not abstract.
-7. The twist must be EARNED. Lay subtle groundwork before pages 10-11.
-8. Use ${child_name}'s name at most ONCE every 3 pages — use "هو"/"هي" and natural pronouns.
-9. NEVER use these clichéd Arabic openings: "في يوم من الأيام" / "كان يا ما كان" / "في قديم الزمان"
-10. Each page should feel like a DIFFERENT EMOTIONAL BEAT — vary the rhythm.
-11. The story must feel like a unique book — NOT a variation of any known children's story.
-12. Arabic must be formal but warm — Modern Standard Arabic that flows naturally when read aloud.
+════════════════════════════════════════════
+OPENING STYLE INSTRUCTION (CRITICAL)
+════════════════════════════════════════════
+Page 1 must use this specific opening approach:
+"${openingStyle}"
 
-═══════════════════════════════════════════════
-IMAGE DESCRIPTIONS (page_events and cover_event)
-═══════════════════════════════════════════════
-For each of the 16 pages AND the cover, write a SHORT English image scene description (20-30 words) that describes:
-- The EXACT visual scene on that specific page (NOT a generic theme scene)
+ABSOLUTELY BANNED opening words/phrases (these make stories sound identical):
+${bannedList}
+
+════════════════════════════════════════════
+ABSOLUTE WRITING RULES — ALL MUST BE FOLLOWED
+════════════════════════════════════════════
+1. Each page: EXACTLY 3 sentences. Short, vivid, specific. No exceptions.
+2. EVERY page must open with a DIFFERENT Arabic word — zero repetition across 16 pages.
+3. "فجأة" (suddenly) is allowed MAXIMUM ONCE in the entire story. Find other ways to convey surprise.
+4. Every page must visibly advance the plot OR deepen the emotional state — zero filler pages.
+5. The tone "${dna.tone.id}" must be FELT through word choice and sentence rhythm — never stated.
+6. The conflict must feel REAL and personal — not abstract or generic.
+7. The twist must be EARNED — lay three subtle seeds before delivering it.
+8. Use ${child_name}'s name at most ONCE every 3 pages — use pronouns naturally in between.
+9. The blueprint's world rule must be used as an active story element at least TWICE.
+10. Each supporting character must appear in at least 2 different pages doing something specific.
+11. The inciting incident from the blueprint must happen on page 1 or 2 — this is non-negotiable.
+12. The story must feel UNLIKE any known children's book — no templates, no formulas.
+13. Arabic must be Modern Standard Arabic — formal but warm, beautiful when read aloud.
+14. The story must be SELF-CONSISTENT — what happens on page 3 must still be true on page 14.
+
+════════════════════════════════════════════
+IMAGE DESCRIPTIONS
+════════════════════════════════════════════
+For each of the 16 pages AND the cover, write a SHORT English image description (20-30 words):
+- The EXACT scene on that specific page — not a generic theme illustration
 - ${child_name}'s precise position, action, and facial expression
-- Specific environment details (time of day, weather, lighting, key objects)
-- Any other characters present and what they are doing
-- The emotional energy of the scene visually
+- Specific environment details matching the blueprint setting
+- Other characters present and what they are doing
+- The emotional energy of the scene
 
-The cover_event should show ${child_name} in the most iconic moment of the story, in the setting.
+The cover_event shows ${child_name} in the single most iconic moment of THIS specific story.
 
-═══════════════════════════════════════════════
-OUTPUT FORMAT — Return ONLY valid JSON, no other text
-═══════════════════════════════════════════════
+════════════════════════════════════════════
+OUTPUT — Return ONLY valid JSON, nothing else
+════════════════════════════════════════════
 {
-  "title": "و[an evocative Arabic story title — the adventure name after 'و']",
+  "title": "و[evocative Arabic story title — the specific adventure name after 'و']",
   "pages": [
-    "Arabic text for page 1 — exactly 3 sentences",
-    "Arabic text for page 2 — exactly 3 sentences",
-    "Arabic text for page 3 — exactly 3 sentences",
-    "Arabic text for page 4 — exactly 3 sentences",
-    "Arabic text for page 5 — exactly 3 sentences",
-    "Arabic text for page 6 — exactly 3 sentences",
-    "Arabic text for page 7 — exactly 3 sentences",
-    "Arabic text for page 8 — exactly 3 sentences",
-    "Arabic text for page 9 — exactly 3 sentences",
-    "Arabic text for page 10 — exactly 3 sentences",
-    "Arabic text for page 11 — exactly 3 sentences",
-    "Arabic text for page 12 — exactly 3 sentences",
-    "Arabic text for page 13 — exactly 3 sentences",
-    "Arabic text for page 14 — exactly 3 sentences",
-    "Arabic text for page 15 — exactly 3 sentences",
-    "Arabic text for page 16 — exactly 3 sentences"
+    "Arabic text page 1 — exactly 3 sentences",
+    "Arabic text page 2 — exactly 3 sentences",
+    "Arabic text page 3 — exactly 3 sentences",
+    "Arabic text page 4 — exactly 3 sentences",
+    "Arabic text page 5 — exactly 3 sentences",
+    "Arabic text page 6 — exactly 3 sentences",
+    "Arabic text page 7 — exactly 3 sentences",
+    "Arabic text page 8 — exactly 3 sentences",
+    "Arabic text page 9 — exactly 3 sentences",
+    "Arabic text page 10 — exactly 3 sentences",
+    "Arabic text page 11 — exactly 3 sentences",
+    "Arabic text page 12 — exactly 3 sentences",
+    "Arabic text page 13 — exactly 3 sentences",
+    "Arabic text page 14 — exactly 3 sentences",
+    "Arabic text page 15 — exactly 3 sentences",
+    "Arabic text page 16 — exactly 3 sentences"
   ],
   "page_events": [
-    "Specific English image description for page 1",
-    "Specific English image description for page 2",
-    "Specific English image description for page 3",
-    "Specific English image description for page 4",
-    "Specific English image description for page 5",
-    "Specific English image description for page 6",
-    "Specific English image description for page 7",
-    "Specific English image description for page 8",
-    "Specific English image description for page 9",
-    "Specific English image description for page 10",
-    "Specific English image description for page 11",
-    "Specific English image description for page 12",
-    "Specific English image description for page 13",
-    "Specific English image description for page 14",
-    "Specific English image description for page 15",
-    "Specific English image description for page 16"
+    "English scene description page 1",
+    "English scene description page 2",
+    "English scene description page 3",
+    "English scene description page 4",
+    "English scene description page 5",
+    "English scene description page 6",
+    "English scene description page 7",
+    "English scene description page 8",
+    "English scene description page 9",
+    "English scene description page 10",
+    "English scene description page 11",
+    "English scene description page 12",
+    "English scene description page 13",
+    "English scene description page 14",
+    "English scene description page 15",
+    "English scene description page 16"
   ],
-  "cover_event": "English image description for the book cover — the most iconic story moment"
+  "cover_event": "English cover image description — the most iconic moment of THIS specific story"
 }`
 }
 
 // ---------------------------------------------------------------------------
-// Validation — ensures Gemini returned the right structure
+// Validation
 // ---------------------------------------------------------------------------
 function validateStoryResult(result, childName) {
   if (!result || typeof result !== 'object') {
@@ -240,14 +312,13 @@ function validateStoryResult(result, childName) {
     result.title = `ومغامرة ${childName}`
   }
   if (!result.cover_event || typeof result.cover_event !== 'string') {
-    result.cover_event = result.page_events[0] || `${childName} standing at the entrance of the adventure world, full of wonder`
+    result.cover_event = result.page_events[0] || `${childName} at the heart of the adventure, wide-eyed and determined`
   }
-  // Ensure all pages are strings
   result.pages = result.pages.map((p, i) =>
     (typeof p === 'string' && p.trim()) ? p.trim() : `صفحة ${i + 1}`
   )
   result.page_events = result.page_events.map((e, i) =>
-    (typeof e === 'string' && e.trim()) ? e.trim() : `${childName} in an adventure scene, page ${i + 1}`
+    (typeof e === 'string' && e.trim()) ? e.trim() : `${childName} in the adventure, page ${i + 1}`
   )
   return result
 }
@@ -257,7 +328,7 @@ function validateStoryResult(result, childName) {
 // ---------------------------------------------------------------------------
 
 /**
- * Generates a complete unique story for an order using Gemini + Story DNA.
+ * Generates a complete unique story for an order using Gemini + blueprint DNA.
  *
  * @param {object} order — { id, child_name, gender, age_group, theme }
  * @returns {Promise<{title, pages, page_events, cover_event, dna, dna_summary}>}
@@ -270,7 +341,20 @@ export async function generateStory(order) {
   const summary = summarizeDNA(dna)
   const prompt  = buildGenerationPrompt(order, dna)
 
-  console.log(`[story-gen] order=${order.id} | ${summary}`)
+  // Prominent debug log — shows exactly which blueprint was chosen
+  console.log(`[story-gen] ═══════════════════════════════════`)
+  console.log(`[story-gen] ORDER:     ${order.id}`)
+  console.log(`[story-gen] CHILD:     ${order.child_name} (${order.gender}, ${order.age_group})`)
+  console.log(`[story-gen] THEME:     ${order.theme}`)
+  console.log(`[story-gen] BLUEPRINT: ${dna.blueprint.id}`)
+  console.log(`[story-gen] PREMISE:   ${dna.blueprint.premise.slice(0, 80)}...`)
+  console.log(`[story-gen] STRUCTURE: ${dna.structure.id} — ${dna.structure.name}`)
+  console.log(`[story-gen] TONE:      ${dna.tone.id}`)
+  console.log(`[story-gen] CONFLICT:  ${dna.conflict.id}`)
+  console.log(`[story-gen] TWIST:     ${dna.twist.id}`)
+  console.log(`[story-gen] SECONDARY: ${dna.secondary.slice(0, 50)}`)
+  console.log(`[story-gen] FULL DNA:  ${summary}`)
+  console.log(`[story-gen] ═══════════════════════════════════`)
 
   let raw
   try {
@@ -281,6 +365,9 @@ export async function generateStory(order) {
 
   const validated = validateStoryResult(raw, order.child_name)
 
+  console.log(`[story-gen] TITLE:     ${validated.title}`)
+  console.log(`[story-gen] ✓ Story generated successfully`)
+
   return {
     title:       validated.title,
     pages:       validated.pages,
@@ -288,16 +375,17 @@ export async function generateStory(order) {
     cover_event: validated.cover_event,
     dna_summary: summary,
     dna: {
-      goal:      dna.goal.id,
-      tone:      dna.tone.id,
-      pacing:    dna.pacing.id,
-      conflict:  dna.conflict.id,
-      helper:    dna.helper.id,
-      twist:     dna.twist.id,
-      ending:    dna.ending.id,
-      narrative: dna.narrative.id,
-      opening:   dna.opening.id,
-      structure: dna.structure.id,
+      blueprint:  dna.blueprint.id,
+      structure:  dna.structure.id,
+      goal:       dna.goal.id,
+      tone:       dna.tone.id,
+      pacing:     dna.pacing.id,
+      conflict:   dna.conflict.id,
+      helper:     dna.helper.id,
+      twist:      dna.twist.id,
+      ending:     dna.ending.id,
+      narrative:  dna.narrative.id,
+      opening:    dna.opening.id,
     },
   }
 }
