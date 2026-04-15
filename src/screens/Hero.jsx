@@ -160,16 +160,19 @@ export default function Hero({ onNext }) {
           className="font-black text-ink"
           style={{ fontSize: 'clamp(1.75rem, 8vw, 2.2rem)', lineHeight: 1.22, letterSpacing: '-0.01em' }}
         >
-          طفلك يصير بطل القصة
+          طفلك هو البطل الحقيقي…
           <br />
-          <span className="text-primary">ويشوف اسمه في كل صفحة</span>
+          <span className="text-primary">مو بس في خياله</span>
         </h1>
       </div>
 
       {/* ── SUBTEXT ─────────────────────────────────────────────── */}
       <div className="fade-up-2 px-5 text-center mb-3">
         <p className="text-ink-mid font-semibold mx-auto" style={{ fontSize: '1.02rem', lineHeight: 1.65, maxWidth: 275 }}>
-          قصة مكتوبة باسمه — هو البطل، هي مغامرته هو.
+          تخيل يفتح الكتاب… ويشوف نفسه بطل القصة في كل صفحة
+        </p>
+        <p className="font-bold mx-auto mt-2" style={{ fontSize: '0.97rem', lineHeight: 1.6, maxWidth: 275, color: '#D4643A' }}>
+          هاي مش قصة… هاي لحظة رح تضل معه طول عمره
         </p>
       </div>
 
@@ -185,7 +188,7 @@ export default function Hero({ onNext }) {
         >
           <span className="text-sm leading-none">🌟</span>
           <span className="text-[13px] font-bold text-ink-mid">
-            أكثر من <span className="text-primary font-black">10,000 طفل</span> أصبحوا أبطال قصصهم
+            أكثر من <span className="text-primary font-black">10,000 أم</span> شافت فرحة طفلها بنفسها
           </span>
         </div>
       </div>
@@ -206,7 +209,7 @@ export default function Hero({ onNext }) {
             199₪
           </span>
           <span className="w-px h-6 bg-warm-200" />
-          <span className="text-base font-bold text-ink-mid">شامل التوصيل</span>
+          <span className="text-base font-bold text-ink-mid">شامل التوصيل لباب البيت</span>
         </div>
       </div>
 
@@ -224,11 +227,14 @@ export default function Hero({ onNext }) {
             letterSpacing: '0.005em',
           }}
         >
-          أنشئ قصة لطفلك الآن
+          خلّي طفلك بطل قصته الآن
         </button>
 
         {/* ── MICRO TRUST ───────────────────────────────────────── */}
-        <div className="flex items-center justify-center gap-3.5 mt-3">
+        <p className="text-center text-[13px] font-bold mt-2.5" style={{ color: '#D4643A' }}>
+          هدية مش رح ينساها طول عمره
+        </p>
+        <div className="flex items-center justify-center gap-3.5 mt-2">
           <span className="text-[12px] font-semibold text-ink-light">جاهز خلال 3–5 دقائق</span>
           <span className="w-px h-3 bg-ink-faint" />
           <span className="text-[12px] font-semibold text-ink-light">بدون تعقيد</span>
