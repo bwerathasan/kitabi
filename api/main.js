@@ -191,20 +191,34 @@ async function handleGenerateOrder(body, req, res, supabaseUrl, anonKey, service
   try {
     console.log(`[generate_order] generating story for ${id} (${order.child_name}, ${order.theme})`)
     storyJson = await generateStory(order)
-    console.log(`[generate_order] story generated — DNA: ${storyJson.dna_summary}`)
-    console.log(`[generate_order] title: ${storyJson.title}`)
+    console.log(`[generate_order] story generated — title="${storyJson.title}" blueprint=${storyJson.dna?.blueprint}`)
+    console.log(`[generate_order] page[0] prefix: ${storyJson.pages?.[0]?.slice(0, 80)}`)
 
-    const storyPatch = await supabasePatch(supabaseUrl, anonKey, id, { story_json: storyJson })
+    // Use serviceKey for this write — anon key may be blocked by RLS or missing column
+    const storyPatch = await fetch(`${supabaseUrl}/rest/v1/orders?id=eq.${id}`, {
+      method:  'PATCH',
+      headers: {
+        'apikey':        serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal',
+      },
+      body: JSON.stringify({ story_json: storyJson }),
+    })
     if (!storyPatch.ok) {
-      console.warn(`[generate_order] story_json PATCH failed (${storyPatch.status}) — column may not exist. Using fallback.`)
-      storyJson = null
+      const errBody = await storyPatch.text().catch(() => '(unreadable)')
+      console.error(`[generate_order] story_json PATCH FAILED — status=${storyPatch.status} body=${errBody.slice(0, 300)}`)
+      console.error(`[generate_order] story was generated but NOT saved to DB — this is the root cause of repeated stories`)
+      // Do NOT null storyJson — keep it alive so this request's PDF still uses the AI story
     } else {
-      console.log(`[generate_order] story_json stored for ${id}`)
+      console.log(`[generate_order] story_json saved to DB for ${id}`)
     }
   } catch (err) {
-    console.warn(`[generate_order] story generation failed (non-fatal): ${err.message}`)
+    console.error(`[generate_order] story generation THREW: ${err.message}`)
+    console.error(err.stack?.slice(0, 500))
     storyJson = null
   }
+  console.log(`[generate_order] storyJson state after save: ${storyJson ? `VALID title="${storyJson.title}"` : 'NULL — will use static fallback'}`)
 
   // 4. Generate image prompts
   let promptData = null
