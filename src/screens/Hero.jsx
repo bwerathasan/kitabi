@@ -160,19 +160,19 @@ export default function Hero({ onNext }) {
           className="font-black text-ink"
           style={{ fontSize: 'clamp(1.75rem, 8vw, 2.2rem)', lineHeight: 1.22, letterSpacing: '-0.01em' }}
         >
-          طفلك هو البطل الحقيقي…
+          طفلك هو البطل…
           <br />
-          <span className="text-primary">مو بس في خياله</span>
+          <span className="text-primary">مش بس في خياله</span>
         </h1>
       </div>
 
       {/* ── SUBTEXT ─────────────────────────────────────────────── */}
       <div className="fade-up-2 px-5 text-center mb-3">
         <p className="text-ink-mid font-semibold mx-auto" style={{ fontSize: '1.02rem', lineHeight: 1.65, maxWidth: 275 }}>
-          تخيل يفتح الكتاب… ويشوف نفسه بطل القصة في كل صفحة
+          أول ما يفتح الكتاب… رح يشوف نفسه بطل القصة في كل صفحة
         </p>
         <p className="font-bold mx-auto mt-2" style={{ fontSize: '0.97rem', lineHeight: 1.6, maxWidth: 275, color: '#D4643A' }}>
-          هاي مش قصة… هاي لحظة رح تضل معه طول عمره
+          هاي مش قصة… هاي ذكرى رح تضل معه طول عمره
         </p>
       </div>
 
@@ -209,7 +209,7 @@ export default function Hero({ onNext }) {
             199₪
           </span>
           <span className="w-px h-6 bg-warm-200" />
-          <span className="text-base font-bold text-ink-mid">شامل التوصيل لباب البيت</span>
+          <span className="text-base font-bold text-ink-mid">التوصيل لباب البيت علينا</span>
         </div>
       </div>
 
@@ -227,12 +227,12 @@ export default function Hero({ onNext }) {
             letterSpacing: '0.005em',
           }}
         >
-          خلّي طفلك بطل قصته الآن
+          خلّي طفلك يعيش القصة الآن
         </button>
 
         {/* ── MICRO TRUST ───────────────────────────────────────── */}
         <p className="text-center text-[13px] font-bold mt-2.5" style={{ color: '#D4643A' }}>
-          هدية مش رح ينساها طول عمره
+          جربه اليوم… وشوف ردة فعله بنفسك
         </p>
         <div className="flex items-center justify-center gap-3.5 mt-2">
           <span className="text-[12px] font-semibold text-ink-light">جاهز خلال 3–5 دقائق</span>
