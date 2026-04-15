@@ -689,11 +689,14 @@ function generateHTML(order, orderId) {
   const he        = isMale ? 'هو' : 'هي'
   const safeTheme = THEMES[theme] ? theme : 'forest'
   const t         = THEMES[safeTheme]
-  const storyPages= t.pages(child_name, he)
+  const sj        = order.story_json
+  const storyPages= (sj && Array.isArray(sj.pages) && sj.pages.length === 16)
+                    ? sj.pages
+                    : t.pages(child_name, he)
+  const docTitle  = `${child_name} ${(sj && sj.title) ? sj.title : t.title}`
   const prompts   = getImagePrompts(safeTheme, child_name)
   const ac        = t.accentColor
   const acSafe    = ac === '#bef264' ? '#5a8a00' : ac
-  const docTitle  = `${child_name} ${t.title}`
 
   // ------------------------------------------------------------------
   // Build slides array: [coverSlide, ...storySlides, backSlide]
