@@ -36,7 +36,7 @@ function pick(arr, seed, salt) {
 // THEME BLUEPRINTS — 5 completely different plot premises per theme
 // This is the primary variation driver. Each blueprint forces a different story.
 // ---------------------------------------------------------------------------
-const THEME_BLUEPRINTS = {
+export const THEME_BLUEPRINTS = {
   jungle: [
     {
       id: 'jungle_moonlit_lost',

@@ -11,7 +11,8 @@
  * different story concept even before the DNA dimensions are applied.
  */
 
-import { buildStoryDNA, summarizeDNA } from './storyDNA.js'
+import { buildStoryDNA, summarizeDNA, THEME_BLUEPRINTS } from './storyDNA.js'
+import { buildEventChain } from './eventPools.js'
 
 // ---------------------------------------------------------------------------
 // Gemini API
@@ -132,7 +133,7 @@ const OPENING_STYLES = [
 // ---------------------------------------------------------------------------
 // Prompt builder — blueprint-driven
 // ---------------------------------------------------------------------------
-function buildGenerationPrompt(order, dna) {
+function buildGenerationPrompt(order, dna, eventChain) {
   const { child_name, gender, age_group, theme } = order
   const isMale      = gender === 'male' || gender === 'boy' || gender === 'ذكر'
   const pronoun     = isMale ? 'هو' : 'هي'
@@ -224,6 +225,30 @@ ${dna.structure.description}
 ════════════════════════════════════════════
 REQUIRED STORY BEATS (follow this arc across 16 pages):
 ${structureFlow}
+
+════════════════════════════════════════════
+MANDATORY EVENT CHAIN — THIS STORY'S SPECIFIC SEQUENCE
+(These events MUST happen in the specified page ranges. Build story beats around them.)
+════════════════════════════════════════════
+
+PAGES 1–2 (OPENING EVENT):
+"${eventChain.start}"
+
+PAGES 3–5 (FIRST CHALLENGE):
+"${eventChain.mid_a}"
+
+PAGES 6–8 (COMPLICATION):
+"${eventChain.mid_b}"
+
+PAGES 9–11 (TURNING POINT):
+"${eventChain.mid_c}"
+
+PAGES 15–16 (RESOLUTION):
+"${eventChain.end}"
+
+Each event is MANDATORY — the story must visibly enact it within the specified pages.
+Pages 12–14 are yours to use as build-up toward the resolution.
+These events COMBINE with the blueprint above — they do not replace it.
 
 ════════════════════════════════════════════
 CHARACTER
@@ -346,6 +371,61 @@ function validateStoryResult(result, childName) {
 }
 
 // ---------------------------------------------------------------------------
+// Anti-repeat blueprint selection
+// ---------------------------------------------------------------------------
+
+/**
+ * Queries Supabase for the last 5 blueprint IDs used for this theme.
+ * If the current blueprint was used recently, cycles through the theme's
+ * other blueprints to pick a fresher one.
+ *
+ * Falls back silently to the original DNA if anything fails.
+ */
+async function selectFreshBlueprint(dna, theme) {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const anonKey     = process.env.SUPABASE_ANON_KEY
+  if (!supabaseUrl || !anonKey) return dna  // no env vars — skip silently
+
+  let recentBlueprints = []
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/orders?theme=eq.${encodeURIComponent(theme)}&select=story_json&order=created_at.desc&limit=5`,
+      { headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` } }
+    )
+    if (res.ok) {
+      const rows = await res.json()
+      recentBlueprints = rows
+        .map(r => r.story_json?.dna?.blueprint)
+        .filter(Boolean)
+    }
+  } catch (err) {
+    console.warn('[story-gen] anti-repeat query failed (non-fatal):', err.message)
+    return dna
+  }
+
+  if (recentBlueprints.length === 0) return dna
+  if (!recentBlueprints.includes(dna.blueprint.id)) {
+    console.log(`[story-gen] ANTI-REPEAT: blueprint ${dna.blueprint.id} is fresh ✓`)
+    return dna
+  }
+
+  // Current blueprint was used recently — try alternatives
+  const allBlueprints = THEME_BLUEPRINTS[theme] || THEME_BLUEPRINTS.forest
+  const alternatives  = allBlueprints.filter(bp => !recentBlueprints.includes(bp.id))
+
+  if (alternatives.length === 0) {
+    console.warn(`[story-gen] ANTI-REPEAT: all blueprints used recently for theme=${theme}, proceeding with original`)
+    return dna
+  }
+
+  // Pick from alternatives — use a time-based offset for freshness
+  const freshBlueprint = alternatives[Date.now() % alternatives.length]
+  console.log(`[story-gen] ANTI-REPEAT: swapped ${dna.blueprint.id} → ${freshBlueprint.id} (was in last 5)`)
+
+  return { ...dna, blueprint: freshBlueprint }
+}
+
+// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -359,11 +439,17 @@ export async function generateStory(order) {
   const apiKey = process.env.GOOGLE_AI_API_KEY
   if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not configured')
 
-  const dna     = buildStoryDNA(order.id, order.theme)
-  const summary = summarizeDNA(dna)
-  const prompt  = buildGenerationPrompt(order, dna)
+  // Build DNA then apply anti-repeat blueprint selection
+  let dna = buildStoryDNA(order.id, order.theme)
+  dna = await selectFreshBlueprint(dna, order.theme)
 
-  // Prominent debug log — shows exactly which blueprint was chosen
+  // Build event chain — uses orderId + blueprintId for extra entropy
+  const eventChain = buildEventChain(order.id, dna.blueprint.id, order.theme)
+
+  const summary = summarizeDNA(dna)
+  const prompt  = buildGenerationPrompt(order, dna, eventChain)
+
+  // Prominent debug log — shows exactly which blueprint + events were chosen
   console.log(`[story-gen] ═══════════════════════════════════`)
   console.log(`[story-gen] ORDER:     ${order.id}`)
   console.log(`[story-gen] CHILD:     ${order.child_name} (${order.gender}, ${order.age_group})`)
@@ -376,6 +462,7 @@ export async function generateStory(order) {
   console.log(`[story-gen] TWIST:     ${dna.twist.id}`)
   console.log(`[story-gen] SECONDARY: ${dna.secondary.slice(0, 50)}`)
   console.log(`[story-gen] FULL DNA:  ${summary}`)
+  console.log(`[story-gen] EVENTS:    ${eventChain.summary}`)
   console.log(`[story-gen] ═══════════════════════════════════`)
 
   let raw
@@ -408,6 +495,13 @@ export async function generateStory(order) {
       ending:     dna.ending.id,
       narrative:  dna.narrative.id,
       opening:    dna.opening.id,
+      events: {
+        start: eventChain.start,
+        mid_a: eventChain.mid_a,
+        mid_b: eventChain.mid_b,
+        mid_c: eventChain.mid_c,
+        end:   eventChain.end,
+      },
     },
   }
 }
