@@ -17,21 +17,24 @@ import { buildEventChain } from './eventPools.js'
 // ---------------------------------------------------------------------------
 // Gemini API
 // ---------------------------------------------------------------------------
-const GEMINI_MODEL = 'gemini-2.5-flash'
-const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const GEMINI_PRIMARY   = 'gemini-2.5-flash'
+const GEMINI_FALLBACK  = 'gemini-2.0-flash'
 
-async function callGemini(prompt, apiKey) {
+function geminiUrl(model) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+}
+
+async function callGeminiOnce(prompt, apiKey, model) {
   let res
   try {
-    res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    res = await fetch(`${geminiUrl(model)}?key=${apiKey}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature:      0.85,   // safe: <1.0 required for stable JSON-mode responses
+          temperature:      0.85,
           topP:             0.95,
-          // topK removed: not needed and can cause 500s on some Gemini versions
           maxOutputTokens:  8192,
           responseMimeType: 'application/json',
         },
@@ -44,8 +47,10 @@ async function callGemini(prompt, apiKey) {
   if (!res.ok) {
     let errBody = ''
     try { errBody = await res.text() } catch {}
-    console.error(`[gemini] HTTP ${res.status} — body: ${errBody.slice(0, 300)}`)
-    throw new Error(`Gemini API ${res.status}: ${errBody.slice(0, 300)}`)
+    console.error(`[gemini] HTTP ${res.status} (${model}) — body: ${errBody.slice(0, 300)}`)
+    const err = new Error(`Gemini API ${res.status}: ${errBody.slice(0, 300)}`)
+    err.status = res.status
+    throw err
   }
 
   let data
@@ -74,6 +79,31 @@ async function callGemini(prompt, apiKey) {
     }
     throw new Error('Gemini response is not valid JSON')
   }
+}
+
+async function callGemini(prompt, apiKey) {
+  // Attempt 1: primary model
+  try {
+    console.log(`[gemini] attempt 1 — ${GEMINI_PRIMARY}`)
+    return await callGeminiOnce(prompt, apiKey, GEMINI_PRIMARY)
+  } catch (err) {
+    if (err.status !== 503) throw err   // non-503 errors are not overload — fail immediately
+    console.warn(`[gemini] 503 on ${GEMINI_PRIMARY}, switching to ${GEMINI_FALLBACK}`)
+  }
+
+  // Attempt 2: fallback model, immediate
+  try {
+    console.log(`[gemini] attempt 2 — ${GEMINI_FALLBACK}`)
+    return await callGeminiOnce(prompt, apiKey, GEMINI_FALLBACK)
+  } catch (err) {
+    if (err.status !== 503) throw err
+    console.warn(`[gemini] 503 on ${GEMINI_FALLBACK}, retrying after 2s`)
+  }
+
+  // Attempt 3: fallback model, after short delay
+  await new Promise(r => setTimeout(r, 2000))
+  console.log(`[gemini] attempt 3 — ${GEMINI_FALLBACK} (after delay)`)
+  return await callGeminiOnce(prompt, apiKey, GEMINI_FALLBACK)
 }
 
 // ---------------------------------------------------------------------------
