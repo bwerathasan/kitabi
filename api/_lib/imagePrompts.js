@@ -994,7 +994,7 @@ function generateStructuredPrompts(order) {
   // Priority 2: Static BASE_PROMPTS per theme
   const hasStoryJson = story_json &&
     Array.isArray(story_json.page_events) &&
-    story_json.page_events.length === 16
+    story_json.page_events.length >= 1
 
   const sceneMeta   = SCENE_METADATA[theme]
   const basePrompts = BASE_PROMPTS[theme]
@@ -1014,7 +1014,7 @@ function generateStructuredPrompts(order) {
   for (let i = 1; i <= 16; i++) {
     let prompt, scene_summary, emotion, environment, key_action, characters_present
 
-    if (hasStoryJson) {
+    if (hasStoryJson && story_json.page_events[i - 1]) {
       // Dynamic path: image prompt derived from actual story event
       const event          = story_json.page_events[i - 1]
       const arabicPageText = Array.isArray(story_json.pages) ? (story_json.pages[i - 1] || '') : ''
