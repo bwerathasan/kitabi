@@ -21,6 +21,32 @@
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * generateImageWithReference(prompt, referenceBuffer)
+ *
+ * Gemini path: sends the reference portrait as inlineData in the first part,
+ * then asks the model to draw the SAME character in the new scene described
+ * by `prompt`. This preserves hair color, hair type, skin tone, and face
+ * structure much more reliably than text-only prompts.
+ *
+ * FLUX / DALL-E path: reference images are not supported — falls back to
+ * generateImage(prompt) silently. Behavior is unchanged from before.
+ *
+ * @param {string} prompt         - Full scene prompt (identity_lock + event)
+ * @param {Buffer|null} referenceBuffer - JPEG buffer of the reference portrait
+ */
+export async function generateImageWithReference(prompt, referenceBuffer) {
+  if (process.env.GOOGLE_AI_API_KEY && referenceBuffer) {
+    return await withRetry(
+      () => generateWithNanoBananaReference(prompt, referenceBuffer),
+      'Nano Banana (ref)'
+    )
+  }
+  // Non-Gemini providers or no reference available — text-only (unchanged)
+  return await generateImage(prompt)
+}
+
 export async function generateImage(prompt) {
   const STYLE_LOCK =
     "cinematic children's book illustration, soft warm lighting, magical atmosphere, " +
@@ -115,6 +141,75 @@ async function generateWithNanoBanana(prompt) {
   if (!imgPart) {
     throw new Error(
       `Nano Banana: no image part in response. Parts: ${JSON.stringify(parts).slice(0, 300)}`
+    )
+  }
+
+  return Buffer.from(imgPart.inlineData.data, 'base64')
+}
+
+// ---------------------------------------------------------------------------
+// Provider 1b: Google Nano Banana — reference-image path
+//
+// Sends the reference portrait as inlineData in the user turn alongside the
+// scene prompt. The model conditions on actual pixels, making hair color,
+// skin tone, and face structure dramatically more reliable than text alone.
+// ---------------------------------------------------------------------------
+async function generateWithNanoBananaReference(prompt, referenceBuffer) {
+  const key          = process.env.GOOGLE_AI_API_KEY
+  const referenceB64 = referenceBuffer.toString('base64')
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${key}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role:  'user',
+            parts: [
+              {
+                // Reference portrait — face/hair/skin/eyes clearly visible
+                inline_data: {
+                  mime_type: 'image/jpeg',
+                  data:      referenceB64,
+                },
+              },
+              {
+                text:
+                  `This image is the REFERENCE PORTRAIT of the child character. ` +
+                  `Their exact hair color, hair type, skin tone, eye color, and face structure ` +
+                  `must be preserved precisely in the new scene. ` +
+                  `Now draw this EXACT SAME child character in a completely new scene: ${prompt}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['IMAGE', 'TEXT'],
+        },
+      }),
+    }
+  )
+
+  if (!res.ok) {
+    const err = await res.text()
+    if (err.includes('limit: 0') || err.includes('quota')) {
+      throw new Error(
+        `Google Nano Banana: billing not enabled on this API key. ` +
+        `Enable billing at https://ai.dev/projects then retry. Raw: ${err.slice(0, 200)}`
+      )
+    }
+    throw new Error(`Google Nano Banana (ref) ${res.status}: ${err.slice(0, 300)}`)
+  }
+
+  const data    = await res.json()
+  const parts   = data?.candidates?.[0]?.content?.parts ?? []
+  const imgPart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'))
+
+  if (!imgPart) {
+    throw new Error(
+      `Nano Banana (ref): no image part in response. Parts: ${JSON.stringify(parts).slice(0, 300)}`
     )
   }
 

@@ -468,6 +468,26 @@ const SCENE_METADATA = {
 }
 
 // ---------------------------------------------------------------------------
+// REFERENCE PORTRAIT PROMPT
+// Generated once per book — face close-up with no scene, purely to lock
+// the character's exact hair color, hair type, skin tone, and eye area.
+// Passed as inlineData to all subsequent Gemini image calls.
+// ---------------------------------------------------------------------------
+function buildReferencePortraitPrompt(child_name, characterBible) {
+  return (
+    `${characterBible.identity_lock} ` +
+    `CHARACTER REFERENCE PORTRAIT: ${characterBible.description} ` +
+    `COMPOSITION: clean portrait of just the child — face and upper body, centered against a plain warm neutral background. ` +
+    `Hair fully visible, showing exact color and texture. Face forward, well-lit, eyes open. ` +
+    `Expression: warm confident smile — positive, inviting, happy. ` +
+    `Lighting: soft even neutral lighting so skin tone, hair color, and eye color are all clearly visible. ` +
+    `DO NOT add any background scene, environment, animals, or props — this is a pure character reference portrait. ` +
+    `EMOTIONAL RULE: child looks happy and confident — NEVER sad, never crying. ` +
+    STYLE_LOCK
+  )
+}
+
+// ---------------------------------------------------------------------------
 // COVER PROMPT GENERATOR
 // Book-cover composition rules: title treatment, central hero, bold design
 // ---------------------------------------------------------------------------
@@ -1114,17 +1134,18 @@ function generateStructuredPrompts(order) {
   }
 
   return {
-    order_id:       order.id,
+    order_id:                order.id,
     child_name,
     theme,
-    style_lock:     STYLE_LOCK,
-    character_bible: characterBible,
-    archetype_id:   characterBible.archetype_id,
-    archetype_name: characterBible.archetype_name,
-    cover_prompt:   coverPrompt,
-    total_images:   17,
-    page_prompts:   pagePrompts,
-    story_driven:   hasStoryJson,   // flag so callers know which path was used
+    style_lock:              STYLE_LOCK,
+    character_bible:         characterBible,
+    archetype_id:            characterBible.archetype_id,
+    archetype_name:          characterBible.archetype_name,
+    reference_portrait_prompt: buildReferencePortraitPrompt(child_name, characterBible),
+    cover_prompt:            coverPrompt,
+    total_images:            17,
+    page_prompts:            pagePrompts,
+    story_driven:            hasStoryJson,
     image_path_pattern: {
       cover: `/images/generated/${order.id}/cover.jpg`,
       page:  `/images/generated/${order.id}/page-{N}.jpg`,
