@@ -13,7 +13,7 @@
  */
 
 import { generateStory }           from './_lib/storyGenerator.js'
-import { generateImage, generateImageWithReference } from './_lib/imageProvider.js'
+import { generateImage }            from './_lib/imageProvider.js'
 import { generateStructuredPrompts } from './_lib/imagePrompts.js'
 import { buildAndUploadPDF }        from './_lib/pdfPipeline.js'
 import { sendCustomerEmail, sendAdminEmail } from './_lib/emailSender.js'
@@ -79,11 +79,10 @@ async function uploadImageToSupabase(buffer, storagePath, supabaseUrl, serviceKe
   return `${supabaseUrl}/storage/v1/object/public/book-images/${storagePath}`
 }
 
-// referenceBuffer: JPEG Buffer from the reference portrait, or null for text-only fallback
-async function generateAndStoreImage(label, storagePath, prompt, supabaseUrl, serviceKey, referenceBuffer = null) {
+async function generateAndStoreImage(label, storagePath, prompt, supabaseUrl, serviceKey) {
   try {
-    console.log(`[${label}] generating image${referenceBuffer ? ' (with reference)' : ''}...`)
-    const buffer = await generateImageWithReference(prompt, referenceBuffer)
+    console.log(`[${label}] generating image...`)
+    const buffer = await generateImage(prompt)
     console.log(`[${label}] uploading ${buffer.length} bytes...`)
     const url = await uploadImageToSupabase(buffer, storagePath, supabaseUrl, serviceKey)
     console.log(`[${label}] done → ${url}`)
@@ -230,26 +229,7 @@ async function handleGenerateOrder(body, req, res, supabaseUrl, anonKey, service
     console.warn('[generate_order] prompt generation failed (non-fatal):', err.message)
   }
 
-  // 5. Generate reference portrait (Gemini only — sequential, before parallel jobs)
-  //    Improves hair color, skin tone, and face consistency across all 17 images.
-  //    Non-fatal: if it fails, falls back to text-only for all images (unchanged behavior).
-  let referenceBuffer = null
-  if (process.env.GOOGLE_AI_API_KEY && promptData?.reference_portrait_prompt) {
-    try {
-      console.log('[generate_order] generating reference portrait...')
-      referenceBuffer = await generateImage(promptData.reference_portrait_prompt)
-      console.log(`[generate_order] reference portrait ready (${referenceBuffer.length} bytes)`)
-      // Upload for inspection — fire-and-forget, non-fatal
-      uploadImageToSupabase(referenceBuffer, `${id}/reference.jpg`, supabaseUrl, serviceKey)
-        .then(() => console.log('[generate_order] reference portrait uploaded'))
-        .catch(e => console.warn('[generate_order] reference portrait upload non-fatal:', e.message))
-    } catch (err) {
-      console.warn('[generate_order] reference portrait failed — falling back to text-only:', err.message)
-      referenceBuffer = null
-    }
-  }
-
-  // 6. Generate all images in parallel (reference buffer passed to each job)
+  // 5. Generate all images in parallel
   let imageResult = null
   if (promptData?.cover_prompt && promptData?.page_prompts?.length) {
     const jobs = [
@@ -261,9 +241,9 @@ async function handleGenerateOrder(body, req, res, supabaseUrl, anonKey, service
       })),
     ]
 
-    console.log(`[generate_order] generating ${jobs.length} images in parallel${referenceBuffer ? ' with reference portrait' : ' (text-only)'}`)
+    console.log(`[generate_order] generating ${jobs.length} images in parallel`)
     const results = await Promise.all(
-      jobs.map(j => generateAndStoreImage(j.label, j.storagePath, j.prompt, supabaseUrl, serviceKey, referenceBuffer))
+      jobs.map(j => generateAndStoreImage(j.label, j.storagePath, j.prompt, supabaseUrl, serviceKey))
     )
 
     const coverResult  = results.find(r => r.label === 'cover')
@@ -293,7 +273,7 @@ async function handleGenerateOrder(body, req, res, supabaseUrl, anonKey, service
     console.warn('[generate_order] no prompt data — skipping image generation')
   }
 
-  // 7. Generate PDF
+  // 6. Generate PDF
   let pdfUrl = null
   try {
     const orderForPdf = { ...order, story_json: storyJson }
@@ -302,7 +282,7 @@ async function handleGenerateOrder(body, req, res, supabaseUrl, anonKey, service
     console.warn('[generate_order] PDF generation failed (non-fatal):', err.message)
   }
 
-  // 8. Mark as complete (non-fatal — work is already done even if this fails)
+  // 7. Mark as complete (non-fatal — work is already done even if this fails)
   try {
     await supabasePatch(supabaseUrl, anonKey, id, { status: 'complete' })
   } catch (err) {
