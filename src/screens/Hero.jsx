@@ -169,7 +169,7 @@ export default function Hero({ onNext }) {
       {/* ── SUBTEXT ─────────────────────────────────────────────── */}
       <div className="fade-up-2 px-5 text-center mb-3">
         <p className="text-ink-mid font-semibold mx-auto" style={{ fontSize: '1.02rem', lineHeight: 1.65, maxWidth: 275 }}>
-          أول ما يفتح الكتاب… رح يشوف نفسه بطل القصة في كل صفحة
+          يفتح الكتاب… ويلاقي نفسه بطل القصة
         </p>
         <p className="font-bold mx-auto mt-2" style={{ fontSize: '0.97rem', lineHeight: 1.6, maxWidth: 275, color: '#D4643A' }}>
           هاي مش قصة… هاي ذكرى رح تضل معه طول عمره
@@ -188,7 +188,7 @@ export default function Hero({ onNext }) {
         >
           <span className="text-sm leading-none">🌟</span>
           <span className="text-[13px] font-bold text-ink-mid">
-            أكثر من <span className="text-primary font-black">10,000 أم</span> شافت فرحة طفلها بنفسها
+            <span className="text-primary font-black">10,000+</span> أم شافت فرحة طفلها
           </span>
         </div>
       </div>
@@ -209,7 +209,7 @@ export default function Hero({ onNext }) {
             199₪
           </span>
           <span className="w-px h-6 bg-warm-200" />
-          <span className="text-base font-bold text-ink-mid">التوصيل لباب البيت علينا</span>
+          <span className="text-base font-bold text-ink-mid">التوصيل علينا</span>
         </div>
       </div>
 
@@ -231,10 +231,7 @@ export default function Hero({ onNext }) {
         </button>
 
         {/* ── MICRO TRUST ───────────────────────────────────────── */}
-        <p className="text-center text-[13px] font-bold mt-2.5" style={{ color: '#D4643A' }}>
-          جربه اليوم… وشوف ردة فعله بنفسك
-        </p>
-        <div className="flex items-center justify-center gap-3.5 mt-2">
+        <div className="flex items-center justify-center gap-3.5 mt-3">
           <span className="text-[12px] font-semibold text-ink-light">جاهز خلال 3–5 دقائق</span>
           <span className="w-px h-3 bg-ink-faint" />
           <span className="text-[12px] font-semibold text-ink-light">بدون تعقيد</span>
