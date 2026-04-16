@@ -719,46 +719,32 @@ function parseScene(pageEvent, arabicPageText) {
 }
 
 // ---------------------------------------------------------------------------
-// DYNAMIC PAGE PROMPT — scene-first structure
+// DYNAMIC PAGE PROMPT — natural scene-first
 //
-// WHY scene-first: image models weight the first ~200 tokens most heavily.
-// Putting 1100+ chars of character description before the scene means the
-// model never gives primary attention to the actual event — it draws the
-// character in a generic setting instead.
+// Structure: scene paragraph → camera → identity_lock → consistency → style
 //
-// Structure: SCENE → ENTITIES → EXPRESSION → ATMOSPHERE → CAMERA → CHARACTER LOCK → STYLE
+// The storyEvent is already natural prose from the AI story engine.
+// It is used directly as the visual description — nothing robotic is appended.
+// Only envAtmosphere is added when the event contains an environmental signal
+// (storm, night, underwater etc.) that benefits from a lighting/mood note.
 // ---------------------------------------------------------------------------
 function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageIndex, arabicPageText) {
   const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
-  const { entities, expression, emotionAtmosphere, envAtmosphere } = parseScene(storyEvent, arabicPageText)
+  const { envAtmosphere } = parseScene(storyEvent, arabicPageText)
 
-  // Entities present in this scene (from event text + Arabic page)
-  const entityNote = entities.length > 0
-    ? ` ${entities.join(', ')} present in the scene.`
-    : ''
-
-  // Expression matched to this moment's emotional state
-  const expressionNote = expression ? ` ${expression}.` : ''
-
-  // Atmospheric mood from weather/environment signals
-  const atmosphereSection = [emotionAtmosphere, envAtmosphere].filter(Boolean).join('. ')
-  const atmosphereNote = atmosphereSection ? ` ${atmosphereSection}.` : ''
+  // Use the event as the scene paragraph exactly as written.
+  // Append an environment note only when a strong atmospheric signal is detected
+  // (e.g. storm, night, underwater) — natural sentence, not a label.
+  const scene = envAtmosphere
+    ? `${storyEvent}. ${envAtmosphere}.`
+    : `${storyEvent}.`
 
   return (
     `Children's storybook illustration. ` +
-
-    // 1. SCENE FIRST — the event is the primary subject and gets first-position model attention
-    `Scene: ${storyEvent}.${entityNote}${expressionNote}${atmosphereNote} ` +
-
-    // 2. Camera angle — composition for this page
+    `${scene} ` +
     `${angle}. ` +
-
-    // 3. Character lock — placed AFTER scene so appearance is a constraint, not the subject
     `${characterBible.identity_lock} ` +
-
-    // 4. Brief consistency reminder after scene so it does not override what was just described
-    `Same face [${characterBible.archetype_id}], skin, hair, eyes — identical on every page. ` +
-
+    `Same face, same hair, same skin, same eyes on every page. ` +
     STYLE_LOCK
   )
 }
