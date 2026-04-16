@@ -169,10 +169,10 @@ export default function Hero({ onNext }) {
       {/* ── SUBTEXT ─────────────────────────────────────────────── */}
       <div className="fade-up-2 px-5 text-center mb-3">
         <p className="text-ink-mid font-semibold mx-auto" style={{ fontSize: '1.02rem', lineHeight: 1.65, maxWidth: 275 }}>
-          يفتح الكتاب… ويلاقي نفسه بطل القصة
+          يفتح الكتاب… ويرى أنه البطل
         </p>
         <p className="font-bold mx-auto mt-2" style={{ fontSize: '0.97rem', lineHeight: 1.6, maxWidth: 275, color: '#D4643A' }}>
-          هاي مش قصة… هاي ذكرى رح تضل معه طول عمره
+          ليست قصة… بل ذكرى سترافقه طول العمر
         </p>
       </div>
 
