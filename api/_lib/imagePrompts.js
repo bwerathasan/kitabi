@@ -669,6 +669,20 @@ const ATMOSPHERE_PATTERNS = [
 ]
 
 /**
+ * Break an event string into its visual clauses.
+ * Each clause becomes one item in the MUST SHOW list.
+ * e.g. "child finds parrot, extends hand gently" → ["child finds parrot", "extends hand gently"]
+ */
+function extractEventElements(eventText) {
+  if (!eventText) return []
+  return eventText
+    .split(/[,;]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 4)
+    .slice(0, 4)
+}
+
+/**
  * Parse the full scene from event + Arabic text.
  * Returns { entities, expression, atmosphere } for prompt construction.
  */
@@ -719,31 +733,46 @@ function parseScene(pageEvent, arabicPageText) {
 }
 
 // ---------------------------------------------------------------------------
-// DYNAMIC PAGE PROMPT — full scene translation
-// Converts the story event + Arabic page text into a structured image directive
-// covering: WHO, WHAT, HOW THEY FEEL, VISUAL EXPRESSION, ATMOSPHERE
+// DYNAMIC PAGE PROMPT — strict event-to-image translation
+// Each prompt is built around EXACTLY what happens on that page.
+// Structure: CHARACTER LOCK → PAGE EVENT MANDATE → MUST SHOW LIST →
+//            EXPRESSION → ATMOSPHERE → STRICT RULE → CAMERA → IDENTITY REMINDER
 // ---------------------------------------------------------------------------
 function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageIndex, arabicPageText) {
   const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
   const { entities, expression, emotionAtmosphere, envAtmosphere } = parseScene(storyEvent, arabicPageText)
 
-  const entitySection = entities.length > 0
-    ? `REQUIRED ENTITIES (must appear prominently): ${entities.join(', ')}. `
+  // Break the event into its component visual clauses — each becomes a hard requirement
+  const eventClauses = extractEventElements(storyEvent)
+  const mustShowItems = [...eventClauses]
+  // Add any detected entities not already covered by the clause text
+  entities.forEach(e => {
+    if (!mustShowItems.some(cl => cl.toLowerCase().includes(e.toLowerCase()))) {
+      mustShowItems.push(`${e} must appear visibly in the scene`)
+    }
+  })
+  const mustShowSection = mustShowItems.length > 0
+    ? `MUST SHOW IN IMAGE: ${mustShowItems.join(' | ')}. `
     : ''
 
   const expressionSection = expression
     ? `CHARACTER EXPRESSION & POSTURE: ${expression}. `
-    : `CHARACTER EXPRESSION: character's face and body clearly reflect the emotional state of this moment. `
+    : `CHARACTER EXPRESSION: character's face and body clearly reflect the emotional state of this exact moment. `
 
   const atmosphereSection = [emotionAtmosphere, envAtmosphere].filter(Boolean).join(', ')
   const atmosphereDirective = atmosphereSection
     ? `ATMOSPHERE & LIGHTING: ${atmosphereSection}. `
     : ''
 
-  const driftGuard = entities.length > 0
-    ? `DO NOT replace the main scene with generic decorations, flowers, or sparkles — ` +
-      `the image must show the specific moment described. `
-    : `Show the specific story moment — not a generic setting illustration. `
+  // Hard rule — no symbolic substitutions, no invented elements
+  const strictRule =
+    `STRICT VISUALIZATION RULE: This image must depict the exact event described above. ` +
+    `Do NOT invent animals, flowers, decorations, or elements absent from the event description. ` +
+    `Do NOT replace the main action with a generic landscape, sparkles, or a decorative scene. ` +
+    `If the event says a lion appears — a lion must be visible. ` +
+    `If the event says the child is running — the child must be running. ` +
+    `If the event says a storm — the storm must be visible in the image. ` +
+    `Every key action and object in the description must be present in the illustration. `
 
   return (
     `A children's storybook illustration. ` +
@@ -754,11 +783,11 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
     // 2. Full face description for structural reference
     `FACE REFERENCE: ${characterBible.description} ` +
 
-    // 3. The scene — what is happening on this page
-    `THIS PAGE'S EVENT: ${storyEvent}. ` +
+    // 3. The event — stated as a direct visual mandate, not a suggestion
+    `PAGE EVENT — DEPICT THIS EXACTLY: ${storyEvent}. ` +
 
-    // 4. Required entities
-    entitySection +
+    // 4. MUST SHOW list — each item is a required visual element
+    mustShowSection +
 
     // 5. Emotion and expression
     expressionSection +
@@ -766,15 +795,16 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
     // 6. Atmosphere
     atmosphereDirective +
 
-    // 7. Composition
-    `COMPOSITION: action and emotion are the main subject. Background supports — does not dominate. ` +
-    driftGuard +
+    // 7. Strict no-substitution rule
+    strictRule +
 
-    // 8. Camera
+    // 8. Composition
+    `COMPOSITION: the page event is the primary subject — background supports and does not dominate. ` +
+
+    // 9. Camera
     `Camera angle: ${angle}. ` +
 
-    // 9. Identity reinforcement LAST — repeat the 3 most visually drifted attributes
-    // after the scene so the event description cannot override them
+    // 10. Identity reinforcement LAST — repeat the 3 most visually drifted attributes
     `IDENTITY REMINDER: same skin (${characterBible.skin}), ` +
     `same hair (${characterBible.hair}), ` +
     `same eyes (${characterBible.eyes}), ` +
