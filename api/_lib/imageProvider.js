@@ -37,22 +37,33 @@
  * @param {Buffer|null} referenceBuffer - JPEG buffer of the reference portrait
  */
 export async function generateImageWithReference(prompt, referenceBuffer) {
-  // Priority 1: Replicate PuLID — real face identity encoding via mathematical embedding.
-  // Dramatically more reliable than visual in-context hints for hair/eye/skin consistency.
+  // Priority 1: Replicate PuLID — real face identity encoding.
+  // Failure falls through to the next provider — never propagates upward.
   if (process.env.REPLICATE_API_KEY && referenceBuffer) {
-    return await withRetry(
-      () => generateWithReplicatePuLID(prompt, referenceBuffer),
-      'Replicate PuLID'
-    )
+    try {
+      return await withRetry(
+        () => generateWithReplicatePuLID(prompt, referenceBuffer),
+        'Replicate PuLID'
+      )
+    } catch (err) {
+      console.warn(`[imageProvider] Replicate PuLID failed, falling back: ${err.message.slice(0, 200)}`)
+    }
   }
-  // Priority 2: Gemini with reference image — visual in-context conditioning
+
+  // Priority 2: Gemini with reference image — visual in-context conditioning.
+  // Failure falls through to text-only.
   if (process.env.GOOGLE_AI_API_KEY && referenceBuffer) {
-    return await withRetry(
-      () => generateWithNanoBananaReference(prompt, referenceBuffer),
-      'Nano Banana (ref)'
-    )
+    try {
+      return await withRetry(
+        () => generateWithNanoBananaReference(prompt, referenceBuffer),
+        'Nano Banana (ref)'
+      )
+    } catch (err) {
+      console.warn(`[imageProvider] Nano Banana (ref) failed, falling back: ${err.message.slice(0, 200)}`)
+    }
   }
-  // Priority 3: text-only fallback — unchanged behavior
+
+  // Priority 3: text-only — always attempted, only throws if no providers are configured at all.
   return await generateImage(prompt)
 }
 
