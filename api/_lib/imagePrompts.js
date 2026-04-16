@@ -249,15 +249,14 @@ function buildCharacterBible(child_name, gender, age_group, theme, appearance, o
     'two loose buns of dark curly hair on top of head',
   ]
 
-  let hair, hairColorExplicit
+  let hair
   if (appearance?.hair_color || appearance?.hair_type) {
-    hairColorExplicit = hairColorLabel[appearance.hair_color] || 'dark'
-    const type        = hairTypeLabel[appearance.hair_type] || (isMale ? 'short' : 'long')
+    const color = hairColorLabel[appearance.hair_color] || 'dark'
+    const type  = hairTypeLabel[appearance.hair_type] || (isMale ? 'short' : 'long')
     hair = isMale
-      ? `short ${type} ${hairColorExplicit} hair`
-      : `${type} ${hairColorExplicit} hair${appearance.hair_type === 'curly' ? ', worn loose' : ' in a loose braid'}`
+      ? `short ${type} ${color} hair`
+      : `${type} ${color} hair${appearance.hair_type === 'curly' ? ', worn loose' : ' in a loose braid'}`
   } else {
-    hairColorExplicit = null
     const defaults = isMale ? DEFAULT_HAIR_M : DEFAULT_HAIR_F
     hair = defaults[(seed >> 5) % defaults.length]
   }
@@ -312,15 +311,11 @@ function buildCharacterBible(child_name, gender, age_group, theme, appearance, o
   // Injected at the START of every prompt (before the scene) so the image
   // model anchors on these attributes first, and again at the END as a
   // hard "must not change" reinforcement after the event description.
-  const hairLockPhrase = hairColorExplicit
-    ? `HAIR COLOR: ${hairColorExplicit} (MANDATORY — must match exactly) | hair style: ${hair} | `
-    : `hair: ${hair} | `
-
   const identity_lock =
     `LOCKED CHARACTER — NEVER CHANGE THESE ON ANY PAGE: ` +
     `${child_name} | ${age.label} Arabic ${pronoun} | ` +
     `skin: ${skin} | ` +
-    hairLockPhrase +
+    `hair: ${hair} | ` +
     `eyes: ${eyes} | ` +
     `outfit: ${outfit} | ` +
     `face structure [${archetype.id}]: ${archetype.face.split(',').slice(0, 2).join(',')}. ` +
@@ -343,7 +338,6 @@ function buildCharacterBible(child_name, gender, age_group, theme, appearance, o
     identity_lock,
     skin,
     hair,
-    hair_color: hairColorExplicit,
     eyes,
     visual_tags,
     archetype_id:   archetype.id,
@@ -490,18 +484,12 @@ function buildCoverPrompt(child_name, characterBible, theme) {
   }
   const env = envMap[theme] || envMap.forest
 
-  const coverHairReminder = characterBible.hair_color
-    ? `HAIR COLOR IS ${characterBible.hair_color.toUpperCase()} — must be clearly visible on the cover. `
-    : ''
-
   return (
     `${characterBible.identity_lock} ` +
     `HERO CHARACTER [archetype ${characterBible.archetype_id} — ${characterBible.archetype_name}]: ` +
     `${characterBible.description} ` +
     `Standing as book-cover hero, ${env}. ` +
     `DO NOT use a generic child face — this character has a unique defined appearance. ` +
-    coverHairReminder +
-    `EMOTIONAL RULE: Child must look confident, happy, and full of wonder — NEVER sad or crying. ` +
     `${coverStyle}, ${STYLE_LOCK}`
   )
 }
@@ -532,9 +520,6 @@ const CAMERA_ANGLES = [
 
 function buildPagePrompt(child_name, characterBible, sceneMeta, basePrompt, pageIndex) {
   const angle = CAMERA_ANGLES[(pageIndex || 1) % CAMERA_ANGLES.length]
-  const hairColorReminder = characterBible.hair_color
-    ? `HAIR COLOR IS ${characterBible.hair_color.toUpperCase()} — do not change. `
-    : ''
   return (
     `A children's storybook illustration. ` +
     `${characterBible.identity_lock} ` +
@@ -543,8 +528,6 @@ function buildPagePrompt(child_name, characterBible, sceneMeta, basePrompt, page
     `Camera angle: ${angle}. ` +
     `Emotional tone: ${sceneMeta.emotion}. ` +
     `IDENTITY REMINDER: same skin (${characterBible.skin}), same hair (${characterBible.hair}), same eyes (${characterBible.eyes}), same face [${characterBible.archetype_id}] — never change. ` +
-    hairColorReminder +
-    `EMOTIONAL RULE: The child must NEVER appear sad, crying, or in tears — always positive and empowering. ` +
     STYLE_LOCK
   )
 }
@@ -604,8 +587,8 @@ const ARABIC_EMOTION_MAP = [
     expression: 'child beaming with joy, wide smile, open body language',
     atmosphere: 'warm joyful light, bright cheerful atmosphere' },
   { ar: ['حزن', 'حزين', 'يبكي', 'بكى', 'دموع', 'أسى'],
-    expression: 'child looks deeply moved and touched, eyes bright and glistening with emotion but face warm and resilient — NOT sad, NOT crying, expression is tender and positive',
-    atmosphere: 'gentle warm emotional light, safe and empowering tone' },
+    expression: 'child looks sad, downcast eyes, slumped shoulders',
+    atmosphere: 'melancholy soft light, quiet somber tone' },
   { ar: ['دهشة', 'مندهش', 'مذهول', 'تعجب', 'استغرب', 'مبهوت'],
     expression: 'child looks amazed, mouth slightly open, wide eyes full of wonder',
     atmosphere: 'magical awe-inspiring light, sense of discovery' },
@@ -638,8 +621,8 @@ const ENGLISH_EMOTION_MAP = [
     expression: 'child beaming with joy, wide smile, arms open',
     atmosphere: 'bright warm joyful light' },
   { words: ['sad', 'crying', 'tears', 'grief', 'sorrow'],
-    expression: 'child looks deeply moved and touched, eyes bright and glistening with emotion but face warm and resilient — NOT sad, NOT crying, expression is tender and positive',
-    atmosphere: 'gentle warm emotional light, safe and empowering tone' },
+    expression: 'child looks sad, eyes glistening, shoulders dropped',
+    atmosphere: 'quiet melancholy light, soft muted tones' },
   { words: ['amazed', 'wonder', 'awe', 'astonished', 'wide-eyed'],
     expression: 'child frozen in wonder, mouth open, eyes wide',
     atmosphere: 'magical glowing atmosphere, awe-inspiring scene' },
@@ -748,15 +731,9 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
     ? `REQUIRED ENTITIES (must appear prominently): ${entities.join(', ')}. `
     : ''
 
-  // Page 1 always gets a forced positive expression regardless of scene content
-  const forcedPositive = pageIndex === 1
-    ? 'child looks confident, curious, and full of wonder — bright happy expression, open body language'
-    : null
-
-  const rawExpression = forcedPositive || expression
-  const expressionSection = rawExpression
-    ? `CHARACTER EXPRESSION & POSTURE: ${rawExpression}. `
-    : `CHARACTER EXPRESSION: character's face and body clearly reflect the emotional state of this moment — positive and empowering. `
+  const expressionSection = expression
+    ? `CHARACTER EXPRESSION & POSTURE: ${expression}. `
+    : `CHARACTER EXPRESSION: character's face and body clearly reflect the emotional state of this moment. `
 
   const atmosphereSection = [emotionAtmosphere, envAtmosphere].filter(Boolean).join(', ')
   const atmosphereDirective = atmosphereSection
@@ -767,11 +744,6 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
     ? `DO NOT replace the main scene with generic decorations, flowers, or sparkles — ` +
       `the image must show the specific moment described. `
     : `Show the specific story moment — not a generic setting illustration. `
-
-  // Hair color reminder — explicit color token repeated at end for maximum enforcement
-  const hairColorReminder = characterBible.hair_color
-    ? `HAIR COLOR IS ${characterBible.hair_color.toUpperCase()} — do not change it on this page. `
-    : ''
 
   return (
     `A children's storybook illustration. ` +
@@ -802,14 +774,11 @@ function buildDynamicPagePrompt(child_name, characterBible, storyEvent, pageInde
     `Camera angle: ${angle}. ` +
 
     // 9. Identity reinforcement LAST — repeat the 3 most visually drifted attributes
+    // after the scene so the event description cannot override them
     `IDENTITY REMINDER: same skin (${characterBible.skin}), ` +
     `same hair (${characterBible.hair}), ` +
     `same eyes (${characterBible.eyes}), ` +
     `same face [${characterBible.archetype_id}] — never change. ` +
-    hairColorReminder +
-
-    // 10. Emotional safety constraint — absolute rule
-    `EMOTIONAL RULE: The child must NEVER appear sad, crying, or in tears — always confident, curious, brave, or joyful. ` +
 
     STYLE_LOCK
   )
@@ -1114,17 +1083,17 @@ function generateStructuredPrompts(order) {
   }
 
   return {
-    order_id:        order.id,
+    order_id:       order.id,
     child_name,
     theme,
-    style_lock:      STYLE_LOCK,
+    style_lock:     STYLE_LOCK,
     character_bible: characterBible,
-    archetype_id:    characterBible.archetype_id,
-    archetype_name:  characterBible.archetype_name,
-    cover_prompt:    coverPrompt,
-    total_images:    17,
-    page_prompts:    pagePrompts,
-    story_driven:    hasStoryJson,
+    archetype_id:   characterBible.archetype_id,
+    archetype_name: characterBible.archetype_name,
+    cover_prompt:   coverPrompt,
+    total_images:   17,
+    page_prompts:   pagePrompts,
+    story_driven:   hasStoryJson,   // flag so callers know which path was used
     image_path_pattern: {
       cover: `/images/generated/${order.id}/cover.jpg`,
       page:  `/images/generated/${order.id}/page-{N}.jpg`,
